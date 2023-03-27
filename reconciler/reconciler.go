@@ -138,11 +138,6 @@ func (r *Reconciler) IsInitialized(instance client.Object, finalizer *string) bo
 		ok = false
 	}
 
-	// support for removing finalizers from existing resources
-	if finalizer == nil && controllerutil.ContainsFinalizer(instance, *finalizer) {
-		controllerutil.RemoveFinalizer(instance, *finalizer)
-		ok = false
-	}
 	return ok
 }
 
