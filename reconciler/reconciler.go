@@ -16,6 +16,7 @@ import (
 	autoscalingv2 "k8s.io/api/autoscaling/v2"
 	corev1 "k8s.io/api/core/v1"
 	policyv1 "k8s.io/api/policy/v1"
+	rbacv1 "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -45,6 +46,9 @@ var managedTypes = ManagedTypes{
 	&policyv1.PodDisruptionBudgetList{},
 	&monitoringv1.PodMonitorList{},
 	&marin3rv1alpha1.EnvoyConfigList{},
+	&rbacv1.RoleBindingList{},
+	&rbacv1.RoleList{},
+	&corev1.ServiceAccountList{},
 }
 
 type AnnotationsDomain string
