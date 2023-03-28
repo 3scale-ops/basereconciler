@@ -55,7 +55,7 @@ func (rt *RolloutTrigger) GetHash(ctx context.Context, cl client.Client, namespa
 // from the config source defined in the RolloutTrigger
 func (rt *RolloutTrigger) GetAnnotationKey() string {
 	if rt.SecretName != nil {
-		return fmt.Sprintf("%s/%s.%s", string(reconciler.Domain), rt.Name, "secret-hash")
+		return fmt.Sprintf("%s/%s.%s", string(reconciler.Config.AnnotationsDomain), rt.Name, "secret-hash")
 	}
-	return fmt.Sprintf("%s/%s.%s", string(reconciler.Domain), rt.Name, "configmap-hash")
+	return fmt.Sprintf("%s/%s.%s", string(reconciler.Config.AnnotationsDomain), rt.Name, "configmap-hash")
 }

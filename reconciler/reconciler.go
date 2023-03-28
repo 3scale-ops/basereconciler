@@ -29,35 +29,42 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 )
 
-type ManagedTypes []client.ObjectList
+type ReconcilerManagedTypes []client.ObjectList
 
-func RegisterManagedType(mt client.ObjectList) {
-	managedTypes = append(managedTypes, mt)
+func (mts ReconcilerManagedTypes) Register(mt client.ObjectList) ReconcilerManagedTypes {
+	mts = append(mts, mt)
+	return mts
 }
 
-var managedTypes = ManagedTypes{
-	&corev1.ServiceList{},
-	&corev1.ConfigMapList{},
-	&appsv1.DeploymentList{},
-	&appsv1.StatefulSetList{},
-	&externalsecretsv1beta1.ExternalSecretList{},
-	&grafanav1alpha1.GrafanaDashboardList{},
-	&autoscalingv2.HorizontalPodAutoscalerList{},
-	&policyv1.PodDisruptionBudgetList{},
-	&monitoringv1.PodMonitorList{},
-	&marin3rv1alpha1.EnvoyConfigList{},
-	&rbacv1.RoleBindingList{},
-	&rbacv1.RoleList{},
-	&corev1.ServiceAccountList{},
+func NewManagedTypes() ReconcilerManagedTypes {
+	return ReconcilerManagedTypes{}
 }
 
-type AnnotationsDomain string
-
-func RegisterAnnotationsDomain(d string) {
-	Domain = AnnotationsDomain(d)
+type ReconcilerOptions struct {
+	ManagedTypes      ReconcilerManagedTypes
+	AnnotationsDomain string
+	ResourcePruner    bool
 }
 
-var Domain AnnotationsDomain = "basereconciler.3cale.net"
+var Config ReconcilerOptions = ReconcilerOptions{
+	AnnotationsDomain: "basereconciler.3cale.net",
+	ResourcePruner:    true,
+	ManagedTypes: ReconcilerManagedTypes{
+		&corev1.ServiceList{},
+		&corev1.ConfigMapList{},
+		&appsv1.DeploymentList{},
+		&appsv1.StatefulSetList{},
+		&externalsecretsv1beta1.ExternalSecretList{},
+		&grafanav1alpha1.GrafanaDashboardList{},
+		&autoscalingv2.HorizontalPodAutoscalerList{},
+		&policyv1.PodDisruptionBudgetList{},
+		&monitoringv1.PodMonitorList{},
+		&marin3rv1alpha1.EnvoyConfigList{},
+		&rbacv1.RoleBindingList{},
+		&rbacv1.RoleList{},
+		&corev1.ServiceAccountList{},
+	},
+}
 
 type Resource interface {
 	Build(ctx context.Context, cl client.Client) (client.Object, error)
@@ -181,7 +188,7 @@ func (r *Reconciler) ReconcileOwnedResources(ctx context.Context, owner client.O
 		})
 	}
 
-	if value, ok := owner.GetAnnotations()[fmt.Sprintf("%s/prune", Domain)]; ok {
+	if value, ok := owner.GetAnnotations()[fmt.Sprintf("%s/prune", Config.AnnotationsDomain)]; ok {
 		prune, err := strconv.ParseBool(value)
 		if err != nil {
 			return err
@@ -191,7 +198,19 @@ func (r *Reconciler) ReconcileOwnedResources(ctx context.Context, owner client.O
 		}
 	}
 
-	r.PruneOrphaned(ctx, owner, managedResources)
+	if Config.ResourcePruner {
+		if value, ok := owner.GetAnnotations()[fmt.Sprintf("%s/prune", Config.AnnotationsDomain)]; ok {
+			prune, err := strconv.ParseBool(value)
+			if err != nil {
+				return err
+			}
+			if prune {
+				if err := r.PruneOrphaned(ctx, owner, managedResources); err != nil {
+					return err
+				}
+			}
+		}
+	}
 
 	return nil
 }
@@ -199,7 +218,7 @@ func (r *Reconciler) ReconcileOwnedResources(ctx context.Context, owner client.O
 func (r *Reconciler) PruneOrphaned(ctx context.Context, owner client.Object, managed []corev1.ObjectReference) error {
 	logger := log.FromContext(ctx)
 
-	for _, lType := range managedTypes {
+	for _, lType := range Config.ManagedTypes {
 
 		err := r.Client.List(ctx, lType, client.InNamespace(owner.GetNamespace()))
 		if err != nil {
@@ -233,16 +252,11 @@ func isOwned(owner client.Object, owned client.Object) bool {
 }
 
 func isManaged(key types.NamespacedName, kind string, managed []corev1.ObjectReference) bool {
-	// spew.Dump(managed)
-	// spew.Dump(uid)
-	// time.Sleep(10 * time.Second)
+
 	for _, m := range managed {
 		if m.Name == key.Name && m.Namespace == key.Namespace && m.Kind == kind {
 			return true
 		}
-		// if m.UID == uid {
-		// 	return true
-		// }
 	}
 	return false
 }
