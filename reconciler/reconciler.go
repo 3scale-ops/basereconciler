@@ -188,31 +188,29 @@ func (r *Reconciler) ReconcileOwnedResources(ctx context.Context, owner client.O
 		})
 	}
 
-	if value, ok := owner.GetAnnotations()[fmt.Sprintf("%s/prune", Config.AnnotationsDomain)]; ok {
-		prune, err := strconv.ParseBool(value)
-		if err != nil {
+	if IsPrunerEnabled(owner) {
+		if err := r.PruneOrphaned(ctx, owner, managedResources); err != nil {
 			return err
-		}
-		if !prune {
-			return nil
-		}
-	}
-
-	if Config.ResourcePruner {
-		if value, ok := owner.GetAnnotations()[fmt.Sprintf("%s/prune", Config.AnnotationsDomain)]; ok {
-			prune, err := strconv.ParseBool(value)
-			if err != nil {
-				return err
-			}
-			if prune {
-				if err := r.PruneOrphaned(ctx, owner, managedResources); err != nil {
-					return err
-				}
-			}
 		}
 	}
 
 	return nil
+}
+
+func IsPrunerEnabled(owner client.Object) bool {
+	// prune is active by default
+	prune := true
+
+	// get the per resource switch (annotation)
+	if value, ok := owner.GetAnnotations()[fmt.Sprintf("%s/prune", Config.AnnotationsDomain)]; ok {
+		var err error
+		prune, err = strconv.ParseBool(value)
+		if err != nil {
+			prune = true
+		}
+	}
+
+	return prune && Config.ResourcePruner
 }
 
 func (r *Reconciler) PruneOrphaned(ctx context.Context, owner client.Object, managed []corev1.ObjectReference) error {
