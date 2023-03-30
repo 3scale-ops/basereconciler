@@ -7,7 +7,6 @@ import (
 	"strconv"
 
 	"github.com/3scale-ops/basereconciler/util"
-	marin3rv1alpha1 "github.com/3scale-ops/marin3r/apis/marin3r/v1alpha1"
 	externalsecretsv1beta1 "github.com/external-secrets/external-secrets/apis/externalsecrets/v1beta1"
 	"github.com/go-logr/logr"
 	grafanav1alpha1 "github.com/grafana-operator/grafana-operator/v4/api/integreatly/v1alpha1"
@@ -59,7 +58,6 @@ var Config ReconcilerOptions = ReconcilerOptions{
 		&autoscalingv2.HorizontalPodAutoscalerList{},
 		&policyv1.PodDisruptionBudgetList{},
 		&monitoringv1.PodMonitorList{},
-		&marin3rv1alpha1.EnvoyConfigList{},
 		&rbacv1.RoleBindingList{},
 		&rbacv1.RoleList{},
 		&corev1.ServiceAccountList{},
