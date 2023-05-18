@@ -72,6 +72,7 @@ var _ = BeforeSuite(func() {
 			filepath.Join("api", "v1alpha1"),
 			filepath.Join("external-apis"),
 		},
+		// UseExistingCluster: pointer.Bool(true),
 	}
 
 	nBig, err := rand.Int(rand.Reader, big.NewInt(1000000))

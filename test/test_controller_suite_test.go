@@ -129,7 +129,7 @@ var _ = Describe("Test controller", func() {
 			}, timeout, poll).ShouldNot(HaveOccurred())
 		})
 
-		It("Triggers a Deployment rollout on Secret contents change", func() {
+		It("triggers a Deployment rollout on Secret contents change", func() {
 
 			dep := &appsv1.Deployment{}
 			Eventually(func() error {
@@ -185,7 +185,7 @@ var _ = Describe("Test controller", func() {
 			}, timeout, poll).Should(BeTrue())
 		})
 
-		It("Deletes specific resources when disabled", func() {
+		It("deletes specific resources when disabled", func() {
 			// Wait for resources to be created
 			pdb := &policyv1.PodDisruptionBudget{}
 			Eventually(func() error {
@@ -236,7 +236,7 @@ var _ = Describe("Test controller", func() {
 
 		})
 
-		It("Deletes all owned resources when custom resource is deleted", func() {
+		It("deletes all owned resources when custom resource is deleted", func() {
 			// Wait for all resources to be created
 
 			dep := &appsv1.Deployment{}
@@ -311,6 +311,14 @@ var _ = Describe("Test controller", func() {
 				)
 				Expect(err).ToNot(HaveOccurred())
 				return svc.GetAnnotations()["key"] == "value"
+			}, timeout, poll).Should(BeTrue())
+		})
+
+		It("updates the status of the custom resource", func() {
+			Eventually(func() bool {
+				err := k8sClient.Get(context.Background(), types.NamespacedName{Name: instance.GetName(), Namespace: instance.GetNamespace()}, instance)
+				Expect(err).ToNot(HaveOccurred())
+				return instance.Status.DeploymentStatus != nil
 			}, timeout, poll).Should(BeTrue())
 		})
 	})

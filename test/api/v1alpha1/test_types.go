@@ -20,8 +20,11 @@ limitations under the License.
 package v1alpha1
 
 import (
+	"github.com/3scale-ops/basereconciler/status"
+	appsv1 "k8s.io/api/apps/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/scheme"
 )
 
@@ -36,11 +39,6 @@ var (
 	AddToScheme = SchemeBuilder.AddToScheme
 )
 
-// NOTE: execute the following commands whenever you modify this file
-//
-// $ bin/controller-gen object:headerFile=hack/boilerplate.go.txt paths=./pkg/reconcilers/basereconciler/v2/test/api/v1alpha1
-// $ bin/controller-gen crd:trivialVersions=true,preserveUnknownFields=false paths=./pkg/reconcilers/basereconciler/v2/test/api/v1alpha1 output:crd:artifacts:config=./pkg/reconcilers/basereconciler/v2/test/api/v1alpha1
-
 // TestSpec defines the desired state of Test
 type TestSpec struct {
 	// +optional
@@ -52,7 +50,20 @@ type TestSpec struct {
 }
 
 // TestStatus defines the observed state of Test
-type TestStatus struct{}
+type TestStatus struct {
+	// +operator-sdk:csv:customresourcedefinitions:type=spec
+	// +optional
+	*appsv1.DeploymentStatus              `json:"deploymentStatus,omitempty"`
+	status.UnimplementedStatefulSetStatus `json:"-"`
+}
+
+func (dss *TestStatus) GetDeploymentStatus(key types.NamespacedName) *appsv1.DeploymentStatus {
+	return dss.DeploymentStatus
+}
+
+func (dss *TestStatus) SetDeploymentStatus(key types.NamespacedName, s *appsv1.DeploymentStatus) {
+	dss.DeploymentStatus = s
+}
 
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
@@ -64,6 +75,12 @@ type Test struct {
 
 	Spec   TestSpec   `json:"spec,omitempty"`
 	Status TestStatus `json:"status,omitempty"`
+}
+
+var _ status.ObjectWithAppStatus = &Test{}
+
+func (t *Test) GetStatus() status.AppStatus {
+	return &t.Status
 }
 
 // +kubebuilder:object:root=true
