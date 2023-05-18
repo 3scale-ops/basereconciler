@@ -19,7 +19,6 @@ import (
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
-	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
@@ -83,16 +82,16 @@ func NewFromManager(mgr manager.Manager) Reconciler {
 // GetInstance tries to retrieve the custom resource instance and perform some standard
 // tasks like initialization and cleanup when required.
 func (r *Reconciler) GetInstance(ctx context.Context, key types.NamespacedName,
-	instance client.Object, finalizer *string, cleanupFns []func()) (*ctrl.Result, error) {
+	instance client.Object, finalizer *string, cleanupFns []func()) error {
 	logger := log.FromContext(ctx)
 
 	err := r.Client.Get(ctx, key, instance)
 	if err != nil {
 		if errors.IsNotFound(err) {
 			// Return and don't requeue
-			return &ctrl.Result{}, nil
+			return nil
 		}
-		return &ctrl.Result{}, err
+		return err
 	}
 
 	if util.IsBeingDeleted(instance) {
@@ -102,36 +101,32 @@ func (r *Reconciler) GetInstance(ctx context.Context, key types.NamespacedName,
 		if finalizer != nil {
 
 			if !controllerutil.ContainsFinalizer(instance, *finalizer) {
-				return &ctrl.Result{}, nil
+				return nil
 			}
 			err := r.ManageCleanupLogic(instance, cleanupFns, logger)
 			if err != nil {
 				logger.Error(err, "unable to delete instance")
-				result, err := ctrl.Result{}, err
-				return &result, err
+				return err
 			}
 			controllerutil.RemoveFinalizer(instance, *finalizer)
 			err = r.Client.Update(ctx, instance)
 			if err != nil {
 				logger.Error(err, "unable to update instance")
-				result, err := ctrl.Result{}, err
-				return &result, err
+				return err
 			}
-
 		}
-		return &ctrl.Result{}, nil
+		return nil
 	}
 
 	if ok := r.IsInitialized(instance, finalizer); !ok {
 		err := r.Client.Update(ctx, instance)
 		if err != nil {
 			logger.Error(err, "unable to initialize instance")
-			result, err := ctrl.Result{}, err
-			return &result, err
+			return err
 		}
-		return &ctrl.Result{}, nil
+		return nil
 	}
-	return nil, nil
+	return nil
 }
 
 // IsInitialized can be used to check if instance is correctly initialized.

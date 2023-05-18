@@ -68,9 +68,9 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 
 	instance := &v1alpha1.Test{}
 	key := types.NamespacedName{Name: req.Name, Namespace: req.Namespace}
-	result, err := r.GetInstance(ctx, key, instance, nil, nil)
-	if result != nil || err != nil {
-		return *result, err
+	err := r.GetInstance(ctx, key, instance, nil, nil)
+	if err != nil {
+		return ctrl.Result{}, err
 	}
 
 	err = r.ReconcileOwnedResources(ctx, instance, []reconciler.Resource{
@@ -114,6 +114,13 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 		return ctrl.Result{}, err
 	}
 
+	// reconcile the status
+	err = r.ReconcileStatus(ctx, instance,
+		[]types.NamespacedName{{Name: "deployment", Namespace: instance.GetNamespace()}}, nil)
+	if err != nil {
+		return ctrl.Result{}, err
+	}
+
 	return ctrl.Result{}, nil
 }
 
@@ -139,7 +146,7 @@ func deployment(namespace string) func() *appsv1.Deployment {
 				Namespace: namespace,
 			},
 			Spec: appsv1.DeploymentSpec{
-				Replicas: pointer.Int32Ptr(1),
+				Replicas: pointer.Int32(1),
 				Selector: &metav1.LabelSelector{
 					MatchLabels: map[string]string{"selector": "deployment"},
 				},
