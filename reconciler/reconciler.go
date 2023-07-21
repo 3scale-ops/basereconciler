@@ -11,6 +11,7 @@ import (
 	"github.com/go-logr/logr"
 	grafanav1alpha1 "github.com/grafana-operator/grafana-operator/v4/api/integreatly/v1alpha1"
 	monitoringv1 "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
+	pipelinev1beta1 "github.com/tektoncd/pipeline/pkg/apis/pipeline/v1beta1"
 	appsv1 "k8s.io/api/apps/v1"
 	autoscalingv2 "k8s.io/api/autoscaling/v2"
 	corev1 "k8s.io/api/core/v1"
@@ -60,6 +61,8 @@ var Config ReconcilerOptions = ReconcilerOptions{
 		&rbacv1.RoleBindingList{},
 		&rbacv1.RoleList{},
 		&corev1.ServiceAccountList{},
+		&pipelinev1beta1.PipelineList{},
+		&pipelinev1beta1.TaskList{},
 	},
 }
 
