@@ -31,6 +31,7 @@ import (
 	autoscalingv2 "k8s.io/api/autoscaling/v2"
 	corev1 "k8s.io/api/core/v1"
 	policyv1 "k8s.io/api/policy/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
@@ -70,6 +71,10 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 	key := types.NamespacedName{Name: req.Name, Namespace: req.Namespace}
 	err := r.GetInstance(ctx, key, instance, nil, nil)
 	if err != nil {
+		if apierrors.IsNotFound(err) {
+			// Return and don't requeue
+			return ctrl.Result{}, nil
+		}
 		return ctrl.Result{}, err
 	}
 
