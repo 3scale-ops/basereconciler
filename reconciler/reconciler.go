@@ -11,12 +11,12 @@ import (
 	"github.com/go-logr/logr"
 	grafanav1alpha1 "github.com/grafana-operator/grafana-operator/v4/api/integreatly/v1alpha1"
 	monitoringv1 "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
+	pipelinev1beta1 "github.com/tektoncd/pipeline/pkg/apis/pipeline/v1beta1"
 	appsv1 "k8s.io/api/apps/v1"
 	autoscalingv2 "k8s.io/api/autoscaling/v2"
 	corev1 "k8s.io/api/core/v1"
 	policyv1 "k8s.io/api/policy/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
-	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -60,6 +60,8 @@ var Config ReconcilerOptions = ReconcilerOptions{
 		&rbacv1.RoleBindingList{},
 		&rbacv1.RoleList{},
 		&corev1.ServiceAccountList{},
+		&pipelinev1beta1.PipelineList{},
+		&pipelinev1beta1.TaskList{},
 	},
 }
 
@@ -87,10 +89,6 @@ func (r *Reconciler) GetInstance(ctx context.Context, key types.NamespacedName,
 
 	err := r.Client.Get(ctx, key, instance)
 	if err != nil {
-		if errors.IsNotFound(err) {
-			// Return and don't requeue
-			return nil
-		}
 		return err
 	}
 
