@@ -79,6 +79,58 @@ func (tt TaskTemplate) ResourceReconciler(ctx context.Context, cl client.Client,
 		needsUpdate = true
 	}
 
+	/* Reconcile spec */
+
+	if instance.Spec.DisplayName != desired.Spec.DisplayName {
+		instance.Spec.DisplayName = desired.Spec.DisplayName
+		needsUpdate = true
+	}
+
+	if instance.Spec.Description != desired.Spec.Description {
+		instance.Spec.Description = desired.Spec.Description
+		needsUpdate = true
+	}
+
+	if !equality.Semantic.DeepEqual(instance.Spec.Params, desired.Spec.Params) {
+		instance.Spec.Params = desired.Spec.Params
+		needsUpdate = true
+	}
+
+	if !equality.Semantic.DeepEqual(instance.Spec.Steps, desired.Spec.Steps) {
+		instance.Spec.Steps = desired.Spec.Steps
+		needsUpdate = true
+	}
+
+	if !equality.Semantic.DeepEqual(instance.Spec.StepTemplate, desired.Spec.StepTemplate) {
+		instance.Spec.StepTemplate = desired.Spec.StepTemplate
+		needsUpdate = true
+	}
+
+	if !equality.Semantic.DeepEqual(instance.Spec.Volumes, desired.Spec.Volumes) {
+		instance.Spec.Volumes = desired.Spec.Volumes
+		needsUpdate = true
+	}
+
+	if !equality.Semantic.DeepEqual(instance.Spec.Sidecars, desired.Spec.Sidecars) {
+		instance.Spec.Sidecars = desired.Spec.Sidecars
+		needsUpdate = true
+	}
+
+	if !equality.Semantic.DeepEqual(instance.Spec.Workspaces, desired.Spec.Workspaces) {
+		instance.Spec.Workspaces = desired.Spec.Workspaces
+		needsUpdate = true
+	}
+
+	if !equality.Semantic.DeepEqual(instance.Spec.Volumes, desired.Spec.Volumes) {
+		instance.Spec.Volumes = desired.Spec.Volumes
+		needsUpdate = true
+	}
+
+	if !equality.Semantic.DeepEqual(instance.Spec.Results, desired.Spec.Results) {
+		instance.Spec.Results = desired.Spec.Results
+		needsUpdate = true
+	}
+
 	if needsUpdate {
 		err := cl.Update(ctx, instance)
 		if err != nil {
