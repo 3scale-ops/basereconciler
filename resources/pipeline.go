@@ -79,6 +79,43 @@ func (pt PipelineTemplate) ResourceReconciler(ctx context.Context, cl client.Cli
 		needsUpdate = true
 	}
 
+	/* Reconcile spec */
+
+	if instance.Spec.DisplayName != desired.Spec.DisplayName {
+		instance.Spec.DisplayName = desired.Spec.DisplayName
+		needsUpdate = true
+	}
+
+	if instance.Spec.Description != desired.Spec.Description {
+		instance.Spec.Description = desired.Spec.Description
+		needsUpdate = true
+	}
+
+	if !equality.Semantic.DeepEqual(instance.Spec.Params, desired.Spec.Params) {
+		instance.Spec.Params = desired.Spec.Params
+		needsUpdate = true
+	}
+
+	if !equality.Semantic.DeepEqual(instance.Spec.Tasks, desired.Spec.Tasks) {
+		instance.Spec.Tasks = desired.Spec.Tasks
+		needsUpdate = true
+	}
+
+	if !equality.Semantic.DeepEqual(instance.Spec.Workspaces, desired.Spec.Workspaces) {
+		instance.Spec.Workspaces = desired.Spec.Workspaces
+		needsUpdate = true
+	}
+
+	if !equality.Semantic.DeepEqual(instance.Spec.Results, desired.Spec.Results) {
+		instance.Spec.Results = desired.Spec.Results
+		needsUpdate = true
+	}
+
+	if !equality.Semantic.DeepEqual(instance.Spec.Finally, desired.Spec.Finally) {
+		instance.Spec.Finally = desired.Spec.Finally
+		needsUpdate = true
+	}
+
 	if needsUpdate {
 		err := cl.Update(ctx, instance)
 		if err != nil {
