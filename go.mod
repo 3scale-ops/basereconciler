@@ -12,6 +12,7 @@ require (
 	github.com/onsi/ginkgo/v2 v2.9.1
 	github.com/onsi/gomega v1.27.3
 	github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring v0.42.1
+	github.com/tektoncd/pipeline v0.49.0
 	k8s.io/api v0.26.2
 	k8s.io/apimachinery v0.26.5
 	k8s.io/client-go v0.26.2
@@ -67,7 +68,6 @@ require (
 	github.com/prometheus/procfs v0.9.0 // indirect
 	github.com/prometheus/statsd_exporter v0.21.0 // indirect
 	github.com/spf13/pflag v1.0.5 // indirect
-	github.com/tektoncd/pipeline v0.49.0 // indirect
 	go.opencensus.io v0.24.0 // indirect
 	go.uber.org/atomic v1.10.0 // indirect
 	go.uber.org/multierr v1.10.0 // indirect
