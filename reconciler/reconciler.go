@@ -17,8 +17,10 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	policyv1 "k8s.io/api/policy/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
+	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
+	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
@@ -84,12 +86,16 @@ func NewFromManager(mgr manager.Manager) Reconciler {
 // GetInstance tries to retrieve the custom resource instance and perform some standard
 // tasks like initialization and cleanup when required.
 func (r *Reconciler) GetInstance(ctx context.Context, key types.NamespacedName,
-	instance client.Object, finalizer *string, cleanupFns []func()) error {
+	instance client.Object, finalizer *string, cleanupFns []func()) (*ctrl.Result, error) {
 	logger := log.FromContext(ctx)
 
 	err := r.Client.Get(ctx, key, instance)
 	if err != nil {
-		return err
+		if errors.IsNotFound(err) {
+			// Return and don't requeue
+			return &ctrl.Result{}, nil
+		}
+		return &ctrl.Result{}, err
 	}
 
 	if util.IsBeingDeleted(instance) {
@@ -99,32 +105,36 @@ func (r *Reconciler) GetInstance(ctx context.Context, key types.NamespacedName,
 		if finalizer != nil {
 
 			if !controllerutil.ContainsFinalizer(instance, *finalizer) {
-				return nil
+				return &ctrl.Result{}, nil
 			}
 			err := r.ManageCleanupLogic(instance, cleanupFns, logger)
 			if err != nil {
 				logger.Error(err, "unable to delete instance")
-				return err
+				result, err := ctrl.Result{}, err
+				return &result, err
 			}
 			controllerutil.RemoveFinalizer(instance, *finalizer)
 			err = r.Client.Update(ctx, instance)
 			if err != nil {
 				logger.Error(err, "unable to update instance")
-				return err
+				result, err := ctrl.Result{}, err
+				return &result, err
 			}
+
 		}
-		return nil
+		return &ctrl.Result{}, nil
 	}
 
 	if ok := r.IsInitialized(instance, finalizer); !ok {
 		err := r.Client.Update(ctx, instance)
 		if err != nil {
 			logger.Error(err, "unable to initialize instance")
-			return err
+			result, err := ctrl.Result{}, err
+			return &result, err
 		}
-		return nil
+		return &ctrl.Result{}, nil
 	}
-	return nil
+	return nil, nil
 }
 
 // IsInitialized can be used to check if instance is correctly initialized.
