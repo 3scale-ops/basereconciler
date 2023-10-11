@@ -4,9 +4,9 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/3scale-ops/basereconciler/property"
 	"github.com/3scale-ops/basereconciler/reconciler"
 	rbacv1 "k8s.io/api/rbac/v1"
-	"k8s.io/apimachinery/pkg/api/equality"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -69,27 +69,13 @@ func (rbt RoleBindingTemplate) ResourceReconciler(ctx context.Context, cl client
 		return nil
 	}
 
-	/* Reconcile metadata */
-	if !equality.Semantic.DeepEqual(instance.GetLabels(), desired.GetLabels()) {
-		instance.ObjectMeta.Labels = desired.GetLabels()
-		needsUpdate = true
-	}
-	if !equality.Semantic.DeepEqual(instance.GetAnnotations(), desired.GetAnnotations()) {
-		instance.ObjectMeta.Annotations = desired.GetAnnotations()
-		needsUpdate = true
-	}
-
-	/* Reconcile the roleref */
-	if !equality.Semantic.DeepEqual(instance.RoleRef, desired.RoleRef) {
-		instance.RoleRef = desired.RoleRef
-		needsUpdate = true
-	}
-
-	/* Reconcile the subjects */
-	if !equality.Semantic.DeepEqual(instance.Subjects, desired.Subjects) {
-		instance.Subjects = desired.Subjects
-		needsUpdate = true
-	}
+	/* Ensure the resource is in its desired state */
+	needsUpdate = property.EnsureDesired(logger,
+		property.NewChangeSet[map[string]string]("metadata.labels", &instance.ObjectMeta.Labels, &desired.ObjectMeta.Labels),
+		property.NewChangeSet[map[string]string]("metadata.annotations", &instance.ObjectMeta.Annotations, &desired.ObjectMeta.Annotations),
+		property.NewChangeSet[rbacv1.RoleRef]("roleRef", &instance.RoleRef, &desired.RoleRef),
+		property.NewChangeSet[[]rbacv1.Subject]("subjects", &instance.Subjects, &desired.Subjects),
+	)
 
 	if needsUpdate {
 		err := cl.Update(ctx, instance)

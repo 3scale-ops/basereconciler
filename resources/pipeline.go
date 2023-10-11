@@ -4,9 +4,9 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/3scale-ops/basereconciler/property"
 	"github.com/3scale-ops/basereconciler/reconciler"
 	pipelinev1beta1 "github.com/tektoncd/pipeline/pkg/apis/pipeline/v1beta1"
-	"k8s.io/apimachinery/pkg/api/equality"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -69,52 +69,18 @@ func (pt PipelineTemplate) ResourceReconciler(ctx context.Context, cl client.Cli
 		return nil
 	}
 
-	/* Reconcile metadata */
-	if !equality.Semantic.DeepEqual(instance.GetLabels(), desired.GetLabels()) {
-		instance.ObjectMeta.Labels = desired.GetLabels()
-		needsUpdate = true
-	}
-	if !equality.Semantic.DeepEqual(instance.GetAnnotations(), desired.GetAnnotations()) {
-		instance.ObjectMeta.Annotations = desired.GetAnnotations()
-		needsUpdate = true
-	}
-
-	/* Reconcile spec */
-
-	if instance.Spec.DisplayName != desired.Spec.DisplayName {
-		instance.Spec.DisplayName = desired.Spec.DisplayName
-		needsUpdate = true
-	}
-
-	if instance.Spec.Description != desired.Spec.Description {
-		instance.Spec.Description = desired.Spec.Description
-		needsUpdate = true
-	}
-
-	if !equality.Semantic.DeepEqual(instance.Spec.Params, desired.Spec.Params) {
-		instance.Spec.Params = desired.Spec.Params
-		needsUpdate = true
-	}
-
-	if !equality.Semantic.DeepEqual(instance.Spec.Tasks, desired.Spec.Tasks) {
-		instance.Spec.Tasks = desired.Spec.Tasks
-		needsUpdate = true
-	}
-
-	if !equality.Semantic.DeepEqual(instance.Spec.Workspaces, desired.Spec.Workspaces) {
-		instance.Spec.Workspaces = desired.Spec.Workspaces
-		needsUpdate = true
-	}
-
-	if !equality.Semantic.DeepEqual(instance.Spec.Results, desired.Spec.Results) {
-		instance.Spec.Results = desired.Spec.Results
-		needsUpdate = true
-	}
-
-	if !equality.Semantic.DeepEqual(instance.Spec.Finally, desired.Spec.Finally) {
-		instance.Spec.Finally = desired.Spec.Finally
-		needsUpdate = true
-	}
+	/* Ensure the resource is in its desired state */
+	needsUpdate = property.EnsureDesired(logger,
+		property.NewChangeSet[map[string]string]("metadata.labels", &instance.ObjectMeta.Labels, &desired.ObjectMeta.Labels),
+		property.NewChangeSet[map[string]string]("metadata.annotations", &instance.ObjectMeta.Annotations, &desired.ObjectMeta.Annotations),
+		property.NewChangeSet[string]("spec.displayName", &instance.Spec.DisplayName, &desired.Spec.DisplayName),
+		property.NewChangeSet[string]("spec.description", &instance.Spec.Description, &desired.Spec.Description),
+		property.NewChangeSet[pipelinev1beta1.ParamSpecs]("spec.params", &instance.Spec.Params, &desired.Spec.Params),
+		property.NewChangeSet[[]pipelinev1beta1.PipelineTask]("spec.tasks", &instance.Spec.Tasks, &desired.Spec.Tasks),
+		property.NewChangeSet[[]pipelinev1beta1.PipelineWorkspaceDeclaration]("spec.workspaces", &instance.Spec.Workspaces, &desired.Spec.Workspaces),
+		property.NewChangeSet[[]pipelinev1beta1.PipelineResult]("spec.results", &instance.Spec.Results, &desired.Spec.Results),
+		property.NewChangeSet[[]pipelinev1beta1.PipelineTask]("spec.finally", &instance.Spec.Finally, &desired.Spec.Finally),
+	)
 
 	if needsUpdate {
 		err := cl.Update(ctx, instance)

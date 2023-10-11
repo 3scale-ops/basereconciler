@@ -4,11 +4,13 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/3scale-ops/basereconciler/property"
 	"github.com/3scale-ops/basereconciler/reconciler"
 	policyv1 "k8s.io/api/policy/v1"
-	"k8s.io/apimachinery/pkg/api/equality"
 	"k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/util/intstr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 )
@@ -69,31 +71,14 @@ func (pdbt PodDisruptionBudgetTemplate) ResourceReconciler(ctx context.Context, 
 		return nil
 	}
 
-	/* Reconcile metadata */
-	if !equality.Semantic.DeepEqual(instance.GetAnnotations(), desired.GetAnnotations()) {
-		instance.ObjectMeta.Annotations = desired.GetAnnotations()
-		needsUpdate = true
-	}
-	if !equality.Semantic.DeepEqual(instance.GetLabels(), desired.GetLabels()) {
-		instance.ObjectMeta.Labels = desired.GetLabels()
-		needsUpdate = true
-	}
-
-	/* Reconcile the maxUnavaliable and minAvaliable properties */
-	if !equality.Semantic.DeepEqual(instance.Spec.MaxUnavailable, desired.Spec.MaxUnavailable) {
-		instance.Spec.MaxUnavailable = desired.Spec.MaxUnavailable
-		needsUpdate = true
-	}
-	if !equality.Semantic.DeepEqual(instance.Spec.MinAvailable, desired.Spec.MinAvailable) {
-		instance.Spec.MinAvailable = desired.Spec.MinAvailable
-		needsUpdate = true
-	}
-
-	/* Reconcile label selector */
-	if !equality.Semantic.DeepEqual(instance.Spec.Selector, desired.Spec.Selector) {
-		instance.Spec.Selector = desired.Spec.Selector
-		needsUpdate = true
-	}
+	/* Ensure the resource is in its desired state */
+	needsUpdate = property.EnsureDesired(logger,
+		property.NewChangeSet[map[string]string]("metadata.labels", &instance.ObjectMeta.Labels, &desired.ObjectMeta.Labels),
+		property.NewChangeSet[map[string]string]("metadata.annotations", &instance.ObjectMeta.Annotations, &desired.ObjectMeta.Annotations),
+		property.NewChangeSet[intstr.IntOrString]("spec.maxUnavailable", instance.Spec.MaxUnavailable, desired.Spec.MaxUnavailable),
+		property.NewChangeSet[intstr.IntOrString]("spec.minAvailable", instance.Spec.MinAvailable, desired.Spec.MinAvailable),
+		property.NewChangeSet[metav1.LabelSelector]("spec.selector", instance.Spec.Selector, desired.Spec.Selector),
+	)
 
 	if needsUpdate {
 		err := cl.Update(ctx, instance)

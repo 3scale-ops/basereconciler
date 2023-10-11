@@ -7,6 +7,7 @@ require (
 	github.com/external-secrets/external-secrets v0.8.1
 	github.com/go-logr/logr v1.2.4
 	github.com/go-test/deep v1.1.0
+	github.com/google/go-cmp v0.5.9
 	github.com/goombaio/namegenerator v0.0.0-20181006234301-989e774b106e
 	github.com/grafana-operator/grafana-operator/v4 v4.10.0
 	github.com/onsi/ginkgo/v2 v2.9.1
@@ -43,7 +44,6 @@ require (
 	github.com/golang/groupcache v0.0.0-20210331224755-41bb18bfe9da // indirect
 	github.com/golang/protobuf v1.5.3 // indirect
 	github.com/google/gnostic v0.6.9 // indirect
-	github.com/google/go-cmp v0.5.9 // indirect
 	github.com/google/go-containerregistry v0.15.2 // indirect
 	github.com/google/gofuzz v1.2.0 // indirect
 	github.com/google/pprof v0.0.0-20230309165930-d61513b1440d // indirect

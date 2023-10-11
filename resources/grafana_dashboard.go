@@ -4,9 +4,9 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/3scale-ops/basereconciler/property"
 	"github.com/3scale-ops/basereconciler/reconciler"
 	grafanav1alpha1 "github.com/grafana-operator/grafana-operator/v4/api/integreatly/v1alpha1"
-	"k8s.io/apimachinery/pkg/api/equality"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -69,17 +69,11 @@ func (gdt GrafanaDashboardTemplate) ResourceReconciler(ctx context.Context, cl c
 		return nil
 	}
 
-	/* Reconcile metadata */
-	if !equality.Semantic.DeepEqual(instance.GetLabels(), desired.GetLabels()) {
-		instance.ObjectMeta.Labels = desired.GetLabels()
-		needsUpdate = true
-	}
-
-	/* Reconcile the spec */
-	if !equality.Semantic.DeepEqual(instance.Spec, desired.Spec) {
-		instance.Spec = desired.Spec
-		needsUpdate = true
-	}
+	/* Ensure the resource is in its desired state */
+	needsUpdate = property.EnsureDesired(logger,
+		property.NewChangeSet[map[string]string]("metadata.labels", &instance.ObjectMeta.Labels, &desired.ObjectMeta.Labels),
+		property.NewChangeSet[grafanav1alpha1.GrafanaDashboardSpec]("spec", &instance.Spec, &desired.Spec),
+	)
 
 	if needsUpdate {
 		err := cl.Update(ctx, instance)
