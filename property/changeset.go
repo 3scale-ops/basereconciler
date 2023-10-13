@@ -25,7 +25,12 @@ func (set *ChangeSet[T]) EnsureDesired(logger logr.Logger) bool {
 	}
 
 	logger.V(1).Info("differences detected", "path", set.path, "diff", cmp.Diff(set.current, set.desired))
-	*set.current = *set.desired
+	if set.desired == nil {
+		set.current = nil
+	} else {
+		*set.current = *set.desired
+	}
+
 	return true
 }
 
