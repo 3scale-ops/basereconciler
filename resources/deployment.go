@@ -4,12 +4,13 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/3scale-ops/basereconciler/property"
 	"github.com/3scale-ops/basereconciler/reconciler"
 	"github.com/3scale-ops/basereconciler/util"
-	"github.com/go-test/deep"
 	appsv1 "k8s.io/api/apps/v1"
-	"k8s.io/apimachinery/pkg/api/equality"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
@@ -81,100 +82,12 @@ func (dep DeploymentTemplate) ResourceReconciler(ctx context.Context, cl client.
 		return nil
 	}
 
-	/* Reconcile metadata */
-
+	/* Merge annotations */
 	desired.ObjectMeta.Annotations = util.MergeMaps(
 		map[string]string{},
 		desired.GetAnnotations(),
 		map[string]string{"deployment.kubernetes.io/revision": instance.GetAnnotations()["deployment.kubernetes.io/revision"]},
 	)
-
-	if !equality.Semantic.DeepEqual(instance.GetAnnotations(), desired.GetAnnotations()) {
-		logger.Info("resource update required due to differences in metadata.annotations.")
-		logger.V(1).Info(
-			fmt.Sprintf("metadata.annotations differences: %s",
-				deep.Equal(instance.GetAnnotations(), desired.GetAnnotations())),
-		)
-		instance.ObjectMeta.Annotations = desired.GetAnnotations()
-		needsUpdate = true
-	}
-	if !equality.Semantic.DeepEqual(instance.GetLabels(), desired.GetLabels()) {
-		logger.Info("resource update required due to differences in metadata.labels.")
-		logger.V(1).Info(
-			fmt.Sprintf("metadata.labels differences: %s",
-				deep.Equal(instance.GetLabels(), desired.GetLabels())),
-		)
-		instance.ObjectMeta.Labels = desired.GetLabels()
-		needsUpdate = true
-	}
-
-	/* Reconcile the MinReadySeconds */
-	if !equality.Semantic.DeepEqual(instance.Spec.MinReadySeconds, desired.Spec.MinReadySeconds) {
-		logger.Info("resource update required due to differences in spec.minReadySeconds.")
-		logger.V(1).Info(
-			fmt.Sprintf("spec.minReadySeconds differences: %s",
-				deep.Equal(instance.Spec.MinReadySeconds, desired.Spec.MinReadySeconds)),
-		)
-		instance.Spec.MinReadySeconds = desired.Spec.MinReadySeconds
-		needsUpdate = true
-	}
-
-	/* Reconcile the Replicas */
-	if !equality.Semantic.DeepEqual(instance.Spec.Replicas, desired.Spec.Replicas) {
-		logger.Info("resource update required due to differences in spec.replicas.")
-		logger.V(1).Info(
-			fmt.Sprintf("spec.replicas differences: %s",
-				deep.Equal(instance.Spec.Replicas, desired.Spec.Replicas)),
-		)
-		instance.Spec.Replicas = desired.Spec.Replicas
-		needsUpdate = true
-	}
-
-	/* Reconcile the Selector */
-	if !equality.Semantic.DeepEqual(instance.Spec.Selector, desired.Spec.Selector) {
-		logger.Info("resource update required due to differences in spec.selector.")
-		logger.V(1).Info(
-			fmt.Sprintf("spec.selector differences: %s",
-				deep.Equal(instance.Spec.Selector, desired.Spec.Selector)),
-		)
-		instance.Spec.Selector = desired.Spec.Selector
-		needsUpdate = true
-	}
-
-	/* Reconcile the Strategy */
-	if !equality.Semantic.DeepEqual(instance.Spec.Strategy, desired.Spec.Strategy) {
-		logger.Info("resource update required due to differences in spec.strategy.")
-		logger.V(1).Info(
-			fmt.Sprintf("spec.strategy differences: %s",
-				deep.Equal(instance.Spec.Strategy, desired.Spec.Strategy)),
-		)
-		instance.Spec.Strategy = desired.Spec.Strategy
-		needsUpdate = true
-	}
-
-	/* Reconcile the Template Labels */
-	if !equality.Semantic.DeepEqual(
-		instance.Spec.Template.ObjectMeta.Labels, desired.Spec.Template.ObjectMeta.Labels) {
-		logger.Info("resource update required due to differences in spec.template.metadata.labels.")
-		logger.V(1).Info(
-			fmt.Sprintf("spec.template.metadata.labels differences: %s",
-				deep.Equal(instance.Spec.Template.ObjectMeta.Labels, desired.Spec.Template.ObjectMeta.Labels)),
-		)
-		instance.Spec.Template.ObjectMeta.Labels = desired.Spec.Template.ObjectMeta.Labels
-		needsUpdate = true
-	}
-
-	/* Reconcile the Template Annotations */
-	if !equality.Semantic.DeepEqual(
-		instance.Spec.Template.ObjectMeta.Annotations, desired.Spec.Template.ObjectMeta.Annotations) {
-		logger.Info("resource update required due differences in spec.template.metadata.annotations.")
-		logger.V(1).Info(
-			fmt.Sprintf("spec.template.metadata.annotations differences: %s",
-				deep.Equal(instance.Spec.Template.ObjectMeta.Annotations, desired.Spec.Template.ObjectMeta.Annotations)),
-		)
-		instance.Spec.Template.ObjectMeta.Annotations = desired.Spec.Template.ObjectMeta.Annotations
-		needsUpdate = true
-	}
 
 	/* Inherit some values usually defaulted by the cluster if not defined on the template */
 	if desired.Spec.Template.Spec.DNSPolicy == "" {
@@ -184,16 +97,18 @@ func (dep DeploymentTemplate) ResourceReconciler(ctx context.Context, cl client.
 		desired.Spec.Template.Spec.SchedulerName = instance.Spec.Template.Spec.SchedulerName
 	}
 
-	/* Reconcile the Template Spec */
-	if !equality.Semantic.DeepEqual(instance.Spec.Template.Spec, desired.Spec.Template.Spec) {
-		logger.Info("resource update required due to differences in spec.template.spec.")
-		logger.V(1).Info(
-			fmt.Sprintf("spec.template.spec differences: %s",
-				deep.Equal(instance.Spec.Template.Spec, desired.Spec.Template.Spec)),
-		)
-		instance.Spec.Template.Spec = desired.Spec.Template.Spec
-		needsUpdate = true
-	}
+	/* Ensure the resource is in its desired state */
+	needsUpdate = property.EnsureDesired(logger,
+		property.NewChangeSet[map[string]string]("metadata.labels", &instance.ObjectMeta.Labels, &desired.ObjectMeta.Labels),
+		property.NewChangeSet[map[string]string]("metadata.annotations", &instance.ObjectMeta.Annotations, &desired.ObjectMeta.Annotations),
+		property.NewChangeSet[int32]("spec.minReadySeconds", &instance.Spec.MinReadySeconds, &desired.Spec.MinReadySeconds),
+		property.NewChangeSet[int32]("spec.replicas", instance.Spec.Replicas, desired.Spec.Replicas),
+		property.NewChangeSet[metav1.LabelSelector]("spec.selector", instance.Spec.Selector, desired.Spec.Selector),
+		property.NewChangeSet[appsv1.DeploymentStrategy]("spec.strategy", &instance.Spec.Strategy, &desired.Spec.Strategy),
+		property.NewChangeSet[map[string]string]("spec.template.metadata.labels", &instance.Spec.Template.ObjectMeta.Labels, &desired.Spec.Template.ObjectMeta.Labels),
+		property.NewChangeSet[map[string]string]("spec.template.metadata.annotations", &instance.Spec.Template.ObjectMeta.Annotations, &desired.Spec.Template.ObjectMeta.Annotations),
+		property.NewChangeSet[corev1.PodSpec]("spec.template.spec", &instance.Spec.Template.Spec, &desired.Spec.Template.Spec),
+	)
 
 	if needsUpdate {
 		err := cl.Update(ctx, instance)

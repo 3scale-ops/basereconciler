@@ -4,9 +4,10 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/3scale-ops/basereconciler/property"
 	"github.com/3scale-ops/basereconciler/reconciler"
 	pipelinev1beta1 "github.com/tektoncd/pipeline/pkg/apis/pipeline/v1beta1"
-	"k8s.io/apimachinery/pkg/api/equality"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -69,67 +70,20 @@ func (tt TaskTemplate) ResourceReconciler(ctx context.Context, cl client.Client,
 		return nil
 	}
 
-	/* Reconcile metadata */
-	if !equality.Semantic.DeepEqual(instance.GetLabels(), desired.GetLabels()) {
-		instance.ObjectMeta.Labels = desired.GetLabels()
-		needsUpdate = true
-	}
-	if !equality.Semantic.DeepEqual(instance.GetAnnotations(), desired.GetAnnotations()) {
-		instance.ObjectMeta.Annotations = desired.GetAnnotations()
-		needsUpdate = true
-	}
-
-	/* Reconcile spec */
-
-	if instance.Spec.DisplayName != desired.Spec.DisplayName {
-		instance.Spec.DisplayName = desired.Spec.DisplayName
-		needsUpdate = true
-	}
-
-	if instance.Spec.Description != desired.Spec.Description {
-		instance.Spec.Description = desired.Spec.Description
-		needsUpdate = true
-	}
-
-	if !equality.Semantic.DeepEqual(instance.Spec.Params, desired.Spec.Params) {
-		instance.Spec.Params = desired.Spec.Params
-		needsUpdate = true
-	}
-
-	if !equality.Semantic.DeepEqual(instance.Spec.Steps, desired.Spec.Steps) {
-		instance.Spec.Steps = desired.Spec.Steps
-		needsUpdate = true
-	}
-
-	if !equality.Semantic.DeepEqual(instance.Spec.StepTemplate, desired.Spec.StepTemplate) {
-		instance.Spec.StepTemplate = desired.Spec.StepTemplate
-		needsUpdate = true
-	}
-
-	if !equality.Semantic.DeepEqual(instance.Spec.Volumes, desired.Spec.Volumes) {
-		instance.Spec.Volumes = desired.Spec.Volumes
-		needsUpdate = true
-	}
-
-	if !equality.Semantic.DeepEqual(instance.Spec.Sidecars, desired.Spec.Sidecars) {
-		instance.Spec.Sidecars = desired.Spec.Sidecars
-		needsUpdate = true
-	}
-
-	if !equality.Semantic.DeepEqual(instance.Spec.Workspaces, desired.Spec.Workspaces) {
-		instance.Spec.Workspaces = desired.Spec.Workspaces
-		needsUpdate = true
-	}
-
-	if !equality.Semantic.DeepEqual(instance.Spec.Volumes, desired.Spec.Volumes) {
-		instance.Spec.Volumes = desired.Spec.Volumes
-		needsUpdate = true
-	}
-
-	if !equality.Semantic.DeepEqual(instance.Spec.Results, desired.Spec.Results) {
-		instance.Spec.Results = desired.Spec.Results
-		needsUpdate = true
-	}
+	/* Ensure the resource is in its desired state */
+	needsUpdate = property.EnsureDesired(logger,
+		property.NewChangeSet[map[string]string]("metadata.labels", &instance.ObjectMeta.Labels, &desired.ObjectMeta.Labels),
+		property.NewChangeSet[map[string]string]("metadata.annotations", &instance.ObjectMeta.Annotations, &desired.ObjectMeta.Annotations),
+		property.NewChangeSet[string]("spec.displayName", &instance.Spec.DisplayName, &desired.Spec.DisplayName),
+		property.NewChangeSet[string]("spec.description", &instance.Spec.Description, &desired.Spec.Description),
+		property.NewChangeSet[pipelinev1beta1.ParamSpecs]("spec.params", &instance.Spec.Params, &desired.Spec.Params),
+		property.NewChangeSet[[]pipelinev1beta1.Step]("spec.steps", &instance.Spec.Steps, &desired.Spec.Steps),
+		property.NewChangeSet[pipelinev1beta1.StepTemplate]("spec.stepTemplate", instance.Spec.StepTemplate, desired.Spec.StepTemplate),
+		property.NewChangeSet[[]corev1.Volume]("spec.volumes", &instance.Spec.Volumes, &desired.Spec.Volumes),
+		property.NewChangeSet[[]pipelinev1beta1.Sidecar]("spec.sidecars", &instance.Spec.Sidecars, &desired.Spec.Sidecars),
+		property.NewChangeSet[[]pipelinev1beta1.WorkspaceDeclaration]("spec.workspaces", &instance.Spec.Workspaces, &desired.Spec.Workspaces),
+		property.NewChangeSet[[]pipelinev1beta1.TaskResult]("spec.results", &instance.Spec.Results, &desired.Spec.Results),
+	)
 
 	if needsUpdate {
 		err := cl.Update(ctx, instance)

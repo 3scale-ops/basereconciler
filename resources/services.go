@@ -4,9 +4,9 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/3scale-ops/basereconciler/property"
 	"github.com/3scale-ops/basereconciler/reconciler"
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/api/equality"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -59,27 +59,13 @@ func (st ServiceTemplate) ResourceReconciler(ctx context.Context, cl client.Clie
 		return err
 	}
 
-	/* Reconcile metadata */
-	if !equality.Semantic.DeepEqual(instance.GetAnnotations(), desired.GetAnnotations()) {
-		instance.ObjectMeta.Annotations = desired.GetAnnotations()
-		needsUpdate = true
-	}
-	if !equality.Semantic.DeepEqual(instance.GetLabels(), desired.GetLabels()) {
-		instance.ObjectMeta.Labels = desired.GetLabels()
-		needsUpdate = true
-	}
-
-	/* Reconcile the ports */
-	if !equality.Semantic.DeepEqual(instance.Spec.Ports, desired.Spec.Ports) {
-		instance.Spec.Ports = desired.Spec.Ports
-		needsUpdate = true
-	}
-
-	/* Reconcile label selector */
-	if !equality.Semantic.DeepEqual(instance.Spec.Selector, desired.Spec.Selector) {
-		instance.Spec.Selector = desired.Spec.Selector
-		needsUpdate = true
-	}
+	/* Ensure the resource is in its desired state */
+	needsUpdate = property.EnsureDesired(logger,
+		property.NewChangeSet[map[string]string]("metadata.labels", &instance.ObjectMeta.Labels, &desired.ObjectMeta.Labels),
+		property.NewChangeSet[map[string]string]("metadata.annotations", &instance.ObjectMeta.Annotations, &desired.ObjectMeta.Annotations),
+		property.NewChangeSet[[]corev1.ServicePort]("spec.ports", &instance.Spec.Ports, &desired.Spec.Ports),
+		property.NewChangeSet[map[string]string]("spec.selector", &instance.Spec.Selector, &desired.Spec.Selector),
+	)
 
 	if needsUpdate {
 		err := cl.Update(ctx, instance)

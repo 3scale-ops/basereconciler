@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/3scale-ops/basereconciler/property"
 	"github.com/3scale-ops/basereconciler/reconciler"
 	autoscalingv2 "k8s.io/api/autoscaling/v2"
 	"k8s.io/apimachinery/pkg/api/equality"
@@ -79,25 +80,15 @@ func (hpat HorizontalPodAutoscalerTemplate) ResourceReconciler(ctx context.Conte
 		needsUpdate = true
 	}
 
-	/* Reconcile the ScaleTargetRef, MinReplicas, MaxReplicas and Metrics properties */
-	if !equality.Semantic.DeepEqual(instance.Spec.ScaleTargetRef, desired.Spec.ScaleTargetRef) {
-		instance.Spec.ScaleTargetRef = desired.Spec.ScaleTargetRef
-		needsUpdate = true
-	}
-
-	if !equality.Semantic.DeepEqual(instance.Spec.MinReplicas, desired.Spec.MinReplicas) {
-		instance.Spec.MinReplicas = desired.Spec.MinReplicas
-		needsUpdate = true
-	}
-	if !equality.Semantic.DeepEqual(instance.Spec.MaxReplicas, desired.Spec.MaxReplicas) {
-		instance.Spec.MaxReplicas = desired.Spec.MaxReplicas
-		needsUpdate = true
-	}
-
-	if !equality.Semantic.DeepEqual(instance.Spec.Metrics, desired.Spec.Metrics) {
-		instance.Spec.Metrics = desired.Spec.Metrics
-		needsUpdate = true
-	}
+	/* Ensure the resource is in its desired state */
+	needsUpdate = property.EnsureDesired(logger,
+		property.NewChangeSet[map[string]string]("metadata.labels", &instance.ObjectMeta.Labels, &desired.ObjectMeta.Labels),
+		property.NewChangeSet[map[string]string]("metadata.annotations", &instance.ObjectMeta.Annotations, &desired.ObjectMeta.Annotations),
+		property.NewChangeSet[autoscalingv2.CrossVersionObjectReference]("spec.scaleTargetRef", &instance.Spec.ScaleTargetRef, &desired.Spec.ScaleTargetRef),
+		property.NewChangeSet[int32]("spec.minReplicas", instance.Spec.MinReplicas, desired.Spec.MinReplicas),
+		property.NewChangeSet[int32]("spec.maxReplicas", &instance.Spec.MaxReplicas, &desired.Spec.MaxReplicas),
+		property.NewChangeSet[[]autoscalingv2.MetricSpec]("spec.metrics", &instance.Spec.Metrics, &desired.Spec.Metrics),
+	)
 
 	if needsUpdate {
 		err := cl.Update(ctx, instance)
