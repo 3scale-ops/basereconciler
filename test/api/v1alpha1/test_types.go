@@ -47,6 +47,8 @@ type TestSpec struct {
 	HPA *bool `json:"hpa,omitempty"`
 	// +optional
 	ServiceAnnotations map[string]string `json:"serviceAnnotations,omitempty"`
+	// +optional
+	PruneService *bool `json:"pruneService,omitempty"`
 }
 
 // TestStatus defines the observed state of Test

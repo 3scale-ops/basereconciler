@@ -39,6 +39,8 @@ spec:
                 type: boolean
               pdb:
                 type: boolean
+              pruneService:
+                type: boolean
               serviceAnnotations:
                 additionalProperties:
                   type: string
