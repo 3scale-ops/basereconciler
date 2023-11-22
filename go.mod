@@ -10,6 +10,7 @@ require (
 	github.com/google/go-cmp v0.5.9
 	github.com/goombaio/namegenerator v0.0.0-20181006234301-989e774b106e
 	github.com/grafana-operator/grafana-operator/v4 v4.10.0
+	github.com/ohler55/ojg v1.20.3
 	github.com/onsi/ginkgo/v2 v2.9.1
 	github.com/onsi/gomega v1.27.3
 	github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring v0.42.1

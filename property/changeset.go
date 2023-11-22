@@ -1,24 +1,57 @@
 package property
 
 import (
+	"fmt"
+
+	"github.com/3scale-ops/basereconciler/util"
 	"github.com/go-logr/logr"
 	"github.com/google/go-cmp/cmp"
+	"github.com/ohler55/ojg/jp"
 	"k8s.io/apimachinery/pkg/api/equality"
+	// metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
+
+type ReconcilableProperty interface {
+	Apply(logr.Logger) bool
+}
+
+func EnsureDesired(logger logr.Logger, changeSets ...ReconcilableProperty) bool {
+	changed := false
+
+	for _, set := range changeSets {
+
+		if set.Apply(logger) {
+			changed = true
+		}
+	}
+
+	return changed
+}
+
+type IgnoreJsonPath string
 
 type ChangeSet[T any] struct {
 	path    string
 	current *T
 	desired *T
+	ignore  []IgnoreJsonPath
 }
 
-func NewChangeSet[T any](path string, current *T, desired *T) *ChangeSet[T] {
-	return &ChangeSet[T]{path: path, current: current, desired: desired}
+func NewChangeSet[T any](path string, current *T, desired *T, ignore ...IgnoreJsonPath) *ChangeSet[T] {
+	return &ChangeSet[T]{path: path, current: current, desired: desired, ignore: ignore}
 }
 
-// EnsureDesired checks if two structs are equal. If they are not, current is overwriten
+// Apply checks if two structs are equal. If they are not, current is overwriten
 // with the value of desired. Bool flag is returned to indicate if the value of current was changed.
-func (set *ChangeSet[T]) EnsureDesired(logger logr.Logger) bool {
+func (set *ChangeSet[T]) Apply(logger logr.Logger) bool {
+
+	for _, jsonpath := range set.ignore {
+		if err := set.removeMatchingProperties(string(jsonpath)); err != nil {
+			// log the error but keep going, this is not a critical error
+			// most likely the jsonpath expression is not correct
+			logger.Error(err, fmt.Sprintf("unable to ignore expression '%s' in ChangeSet", jsonpath), "path", set.path)
+		}
+	}
 
 	if equality.Semantic.DeepEqual(set.current, set.desired) {
 		return false
@@ -34,19 +67,31 @@ func (set *ChangeSet[T]) EnsureDesired(logger logr.Logger) bool {
 	return true
 }
 
-type ReconcilableProperty interface {
-	EnsureDesired(logger logr.Logger) bool
-}
+func (set *ChangeSet[T]) removeMatchingProperties(jsonpath string) error {
 
-func EnsureDesired(logger logr.Logger, changeSets ...ReconcilableProperty) bool {
-	changed := false
-
-	for _, set := range changeSets {
-
-		if set.EnsureDesired(logger) {
-			changed = true
-		}
+	expr, err := jp.ParseString(jsonpath)
+	if err != nil {
+		return err
 	}
 
-	return changed
+	a := util.MustStructToMap(set.current)
+	b := util.MustStructToMap(set.desired)
+
+	err = expr.Del(a)
+	if err != nil {
+		return err
+	}
+	err = expr.Del(b)
+	if err != nil {
+		return err
+	}
+
+	moda := new(T)
+	modb := new(T)
+	util.MustMapToStruct(a, moda)
+	util.MustMapToStruct(b, modb)
+	set.current = moda
+	set.desired = modb
+
+	return nil
 }
