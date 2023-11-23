@@ -26,9 +26,9 @@ func (st ServiceTemplate) Build(ctx context.Context, cl client.Client) (client.O
 
 	svc := st.Template()
 
-	if err := populateServiceSpecRuntimeValues(ctx, cl, svc); err != nil {
-		return nil, err
-	}
+	// if err := populateServiceSpecRuntimeValues(ctx, cl, svc); err != nil {
+	// 	return nil, err
+	// }
 
 	return svc.DeepCopy(), nil
 }
@@ -63,7 +63,10 @@ func (st ServiceTemplate) ResourceReconciler(ctx context.Context, cl client.Clie
 	needsUpdate = property.EnsureDesired(logger,
 		property.NewChangeSet[map[string]string]("metadata.labels", &instance.ObjectMeta.Labels, &desired.ObjectMeta.Labels),
 		property.NewChangeSet[map[string]string]("metadata.annotations", &instance.ObjectMeta.Annotations, &desired.ObjectMeta.Annotations),
-		property.NewChangeSet[[]corev1.ServicePort]("spec.ports", &instance.Spec.Ports, &desired.Spec.Ports),
+		property.NewChangeSet[corev1.ServiceType]("spec.type", &instance.Spec.Type, &desired.Spec.Type),
+		property.NewChangeSet[[]corev1.ServicePort]("spec.ports", &instance.Spec.Ports, &desired.Spec.Ports,
+			property.IgnoreNested("[*].nodePort"),
+		),
 		property.NewChangeSet[map[string]string]("spec.selector", &instance.Spec.Selector, &desired.Spec.Selector),
 	)
 
@@ -78,49 +81,49 @@ func (st ServiceTemplate) ResourceReconciler(ctx context.Context, cl client.Clie
 	return nil
 }
 
-func populateServiceSpecRuntimeValues(ctx context.Context, cl client.Client, svc *corev1.Service) error {
+// func populateServiceSpecRuntimeValues(ctx context.Context, cl client.Client, svc *corev1.Service) error {
 
-	instance := &corev1.Service{}
-	err := cl.Get(ctx, types.NamespacedName{Name: svc.GetName(), Namespace: svc.GetNamespace()}, instance)
-	if err != nil {
-		if errors.IsNotFound(err) {
-			// Resource not found, return the template as is
-			// because there are not runtime values yet
-			return nil
-		}
-		return err
-	}
+// 	instance := &corev1.Service{}
+// 	err := cl.Get(ctx, types.NamespacedName{Name: svc.GetName(), Namespace: svc.GetNamespace()}, instance)
+// 	if err != nil {
+// 		if errors.IsNotFound(err) {
+// 			// Resource not found, return the template as is
+// 			// because there are not runtime values yet
+// 			return nil
+// 		}
+// 		return err
+// 	}
 
-	// Set runtime values in the resource:
-	// "/spec/clusterIP", "/spec/clusterIPs", "/spec/ipFamilies", "/spec/ipFamilyPolicy", "/spec/ports/*/nodePort"
-	svc.Spec.ClusterIP = instance.Spec.ClusterIP
-	svc.Spec.ClusterIPs = instance.Spec.ClusterIPs
-	svc.Spec.IPFamilies = instance.Spec.IPFamilies
-	svc.Spec.IPFamilyPolicy = instance.Spec.IPFamilyPolicy
+// 	// Set runtime values in the resource:
+// 	// "/spec/clusterIP", "/spec/clusterIPs", "/spec/ipFamilies", "/spec/ipFamilyPolicy", "/spec/ports/*/nodePort"
+// 	svc.Spec.ClusterIP = instance.Spec.ClusterIP
+// 	svc.Spec.ClusterIPs = instance.Spec.ClusterIPs
+// 	svc.Spec.IPFamilies = instance.Spec.IPFamilies
+// 	svc.Spec.IPFamilyPolicy = instance.Spec.IPFamilyPolicy
 
-	// For services that are not ClusterIP we need to populate the runtime values
-	// of NodePort for each port
-	if svc.Spec.Type != corev1.ServiceTypeClusterIP {
-		for idx, port := range svc.Spec.Ports {
-			runtimePort := findPort(port.Port, port.Protocol, instance.Spec.Ports)
-			if runtimePort != nil {
-				svc.Spec.Ports[idx].NodePort = runtimePort.NodePort
-			}
-		}
-	}
+// 	// For services that are not ClusterIP we need to populate the runtime values
+// 	// of NodePort for each port
+// 	if svc.Spec.Type != corev1.ServiceTypeClusterIP {
+// 		for idx, port := range svc.Spec.Ports {
+// 			runtimePort := findPort(port.Port, port.Protocol, instance.Spec.Ports)
+// 			if runtimePort != nil {
+// 				svc.Spec.Ports[idx].NodePort = runtimePort.NodePort
+// 			}
+// 		}
+// 	}
 
-	return nil
-}
+// 	return nil
+// }
 
-func findPort(pNumber int32, pProtocol corev1.Protocol, ports []corev1.ServicePort) *corev1.ServicePort {
-	// Ports within a svc are uniquely identified by
-	// the "port" and "protocol" fields. This is documented in
-	// k8s API reference
-	for _, port := range ports {
-		if pNumber == port.Port && pProtocol == port.Protocol {
-			return &port
-		}
-	}
-	// not found
-	return nil
-}
+// func findPort(pNumber int32, pProtocol corev1.Protocol, ports []corev1.ServicePort) *corev1.ServicePort {
+// 	// Ports within a svc are uniquely identified by
+// 	// the "port" and "protocol" fields. This is documented in
+// 	// k8s API reference
+// 	for _, port := range ports {
+// 		if pNumber == port.Port && pProtocol == port.Protocol {
+// 			return &port
+// 		}
+// 	}
+// 	// not found
+// 	return nil
+// }
