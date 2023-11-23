@@ -2,6 +2,7 @@ package property
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/3scale-ops/basereconciler/util"
 	"github.com/go-logr/logr"
@@ -69,7 +70,9 @@ func (set *ChangeSet[T]) Apply(logger logr.Logger) bool {
 
 func (set *ChangeSet[T]) removeMatchingProperties(jsonpath string) error {
 
-	expr, err := jp.ParseString(jsonpath)
+	relativeJSONPath := strings.TrimPrefix(strings.TrimPrefix(jsonpath, set.path), ".")
+
+	expr, err := jp.ParseString(relativeJSONPath)
 	if err != nil {
 		return err
 	}

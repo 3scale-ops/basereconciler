@@ -85,7 +85,8 @@ func (dep DeploymentTemplate) ResourceReconciler(ctx context.Context, cl client.
 	needsUpdate = property.EnsureDesired(logger,
 		property.NewChangeSet[map[string]string]("metadata.labels", &instance.ObjectMeta.Labels, &desired.ObjectMeta.Labels),
 		property.NewChangeSet[map[string]string]("metadata.annotations", &instance.ObjectMeta.Annotations, &desired.ObjectMeta.Annotations,
-			property.IgnoreNested(`['deployment.kubernetes.io/revision']`)),
+			property.IgnoreNested(`metadata.annotations['deployment.kubernetes.io/revision']`),
+		),
 		property.NewChangeSet[int32]("spec.minReadySeconds", &instance.Spec.MinReadySeconds, &desired.Spec.MinReadySeconds),
 		property.NewChangeSet[int32]("spec.replicas", instance.Spec.Replicas, desired.Spec.Replicas),
 		property.NewChangeSet[metav1.LabelSelector]("spec.selector", instance.Spec.Selector, desired.Spec.Selector),
@@ -93,7 +94,9 @@ func (dep DeploymentTemplate) ResourceReconciler(ctx context.Context, cl client.
 		property.NewChangeSet[map[string]string]("spec.template.metadata.labels", &instance.Spec.Template.ObjectMeta.Labels, &desired.Spec.Template.ObjectMeta.Labels),
 		property.NewChangeSet[map[string]string]("spec.template.metadata.annotations", &instance.Spec.Template.ObjectMeta.Annotations, &desired.Spec.Template.ObjectMeta.Annotations),
 		property.NewChangeSet[corev1.PodSpec]("spec.template.spec", &instance.Spec.Template.Spec, &desired.Spec.Template.Spec,
-			property.IgnoreNested(".dnsPolicy"), property.IgnoreNested(".schedulerName")),
+			property.IgnoreNested("spec.template.spec.dnsPolicy"),
+			property.IgnoreNested("spec.template.spec.schedulerName"),
+		),
 	)
 
 	if needsUpdate {

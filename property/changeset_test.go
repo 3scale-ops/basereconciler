@@ -67,7 +67,7 @@ func Test_ChangeSet_removeMatchingProperties(t *testing.T) {
 					},
 				},
 			},
-			jsonpath: ".data[*].remoteRef.metadataPolicy",
+			jsonpath: "spec.data[*].remoteRef.metadataPolicy",
 			want: &ChangeSet[externalsecretsv1beta1.ExternalSecretSpec]{
 				path: "spec",
 				current: &externalsecretsv1beta1.ExternalSecretSpec{
@@ -127,7 +127,7 @@ func Test_ChangeSet_removeMatchingProperties(t *testing.T) {
 					"key": "value",
 				},
 			},
-			jsonpath: `['deployment.kubernetes.io/revision']`,
+			jsonpath: `metadata.annotations['deployment.kubernetes.io/revision']`,
 			want: &ChangeSet[map[string]string]{
 				path:    "metadata.annotations",
 				current: &map[string]string{},

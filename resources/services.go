@@ -65,7 +65,7 @@ func (st ServiceTemplate) ResourceReconciler(ctx context.Context, cl client.Clie
 		property.NewChangeSet[map[string]string]("metadata.annotations", &instance.ObjectMeta.Annotations, &desired.ObjectMeta.Annotations),
 		property.NewChangeSet[corev1.ServiceType]("spec.type", &instance.Spec.Type, &desired.Spec.Type),
 		property.NewChangeSet[[]corev1.ServicePort]("spec.ports", &instance.Spec.Ports, &desired.Spec.Ports,
-			property.IgnoreNested("[*].nodePort"),
+			property.IgnoreNested("spec.ports[*].nodePort"),
 		),
 		property.NewChangeSet[map[string]string]("spec.selector", &instance.Spec.Selector, &desired.Spec.Selector),
 	)

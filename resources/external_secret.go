@@ -73,7 +73,8 @@ func (est ExternalSecretTemplate) ResourceReconciler(ctx context.Context, cl cli
 	needsUpdate = property.EnsureDesired(logger,
 		property.NewChangeSet[map[string]string]("metadata.labels", &instance.ObjectMeta.Labels, &desired.ObjectMeta.Labels),
 		property.NewChangeSet[externalsecretsv1beta1.ExternalSecretSpec]("spec", &instance.Spec, &desired.Spec,
-			property.IgnoreNested("data[*].remoteRef.metadataPolicy")),
+			property.IgnoreNested("spec.data[*].remoteRef.metadataPolicy"),
+		),
 	)
 
 	if needsUpdate {
