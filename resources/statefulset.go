@@ -76,13 +76,6 @@ func (sts StatefulSetTemplate) ResourceReconciler(ctx context.Context, cl client
 		return nil
 	}
 
-	if desired.Spec.Template.Spec.SchedulerName == "" {
-		desired.Spec.Template.Spec.SchedulerName = instance.Spec.Template.Spec.SchedulerName
-	}
-	if desired.Spec.Template.Spec.DNSPolicy == "" {
-		desired.Spec.Template.Spec.DNSPolicy = instance.Spec.Template.Spec.DNSPolicy
-	}
-
 	/* Ensure the resource is in its desired state */
 	needsUpdate = property.EnsureDesired(logger,
 		property.NewChangeSet[map[string]string]("metadata.labels", &instance.ObjectMeta.Labels, &desired.ObjectMeta.Labels),
@@ -96,7 +89,8 @@ func (sts StatefulSetTemplate) ResourceReconciler(ctx context.Context, cl client
 		property.NewChangeSet[[]corev1.PersistentVolumeClaim]("spec.volumeClaimTemplates", &instance.Spec.VolumeClaimTemplates, &desired.Spec.VolumeClaimTemplates),
 		property.NewChangeSet[map[string]string]("spec.template.metadata.labels", &instance.Spec.Template.ObjectMeta.Labels, &desired.Spec.Template.ObjectMeta.Labels),
 		property.NewChangeSet[map[string]string]("spec.template.metadata.annotations", &instance.Spec.Template.ObjectMeta.Annotations, &desired.Spec.Template.ObjectMeta.Annotations),
-		property.NewChangeSet[corev1.PodSpec]("spec.template.spec", &instance.Spec.Template.Spec, &desired.Spec.Template.Spec),
+		property.NewChangeSet[corev1.PodSpec]("spec.template.spec", &instance.Spec.Template.Spec, &desired.Spec.Template.Spec,
+			property.IgnoreNested(".dnsPolicy"), property.IgnoreNested(".schedulerName")),
 	)
 
 	if needsUpdate {

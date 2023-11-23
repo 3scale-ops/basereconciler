@@ -6,7 +6,6 @@ import (
 
 	"github.com/3scale-ops/basereconciler/property"
 	"github.com/3scale-ops/basereconciler/reconciler"
-	"github.com/3scale-ops/basereconciler/util"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -82,32 +81,19 @@ func (dep DeploymentTemplate) ResourceReconciler(ctx context.Context, cl client.
 		return nil
 	}
 
-	/* Merge annotations */
-	desired.ObjectMeta.Annotations = util.MergeMaps(
-		map[string]string{},
-		desired.GetAnnotations(),
-		map[string]string{"deployment.kubernetes.io/revision": instance.GetAnnotations()["deployment.kubernetes.io/revision"]},
-	)
-
-	/* Inherit some values usually defaulted by the cluster if not defined on the template */
-	if desired.Spec.Template.Spec.DNSPolicy == "" {
-		desired.Spec.Template.Spec.DNSPolicy = instance.Spec.Template.Spec.DNSPolicy
-	}
-	if desired.Spec.Template.Spec.SchedulerName == "" {
-		desired.Spec.Template.Spec.SchedulerName = instance.Spec.Template.Spec.SchedulerName
-	}
-
 	/* Ensure the resource is in its desired state */
 	needsUpdate = property.EnsureDesired(logger,
 		property.NewChangeSet[map[string]string]("metadata.labels", &instance.ObjectMeta.Labels, &desired.ObjectMeta.Labels),
-		property.NewChangeSet[map[string]string]("metadata.annotations", &instance.ObjectMeta.Annotations, &desired.ObjectMeta.Annotations),
+		property.NewChangeSet[map[string]string]("metadata.annotations", &instance.ObjectMeta.Annotations, &desired.ObjectMeta.Annotations,
+			property.IgnoreNested(`['deployment.kubernetes.io/revision']`)),
 		property.NewChangeSet[int32]("spec.minReadySeconds", &instance.Spec.MinReadySeconds, &desired.Spec.MinReadySeconds),
 		property.NewChangeSet[int32]("spec.replicas", instance.Spec.Replicas, desired.Spec.Replicas),
 		property.NewChangeSet[metav1.LabelSelector]("spec.selector", instance.Spec.Selector, desired.Spec.Selector),
 		property.NewChangeSet[appsv1.DeploymentStrategy]("spec.strategy", &instance.Spec.Strategy, &desired.Spec.Strategy),
 		property.NewChangeSet[map[string]string]("spec.template.metadata.labels", &instance.Spec.Template.ObjectMeta.Labels, &desired.Spec.Template.ObjectMeta.Labels),
 		property.NewChangeSet[map[string]string]("spec.template.metadata.annotations", &instance.Spec.Template.ObjectMeta.Annotations, &desired.Spec.Template.ObjectMeta.Annotations),
-		property.NewChangeSet[corev1.PodSpec]("spec.template.spec", &instance.Spec.Template.Spec, &desired.Spec.Template.Spec),
+		property.NewChangeSet[corev1.PodSpec]("spec.template.spec", &instance.Spec.Template.Spec, &desired.Spec.Template.Spec,
+			property.IgnoreNested(".dnsPolicy"), property.IgnoreNested(".schedulerName")),
 	)
 
 	if needsUpdate {
