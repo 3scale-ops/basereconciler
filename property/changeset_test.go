@@ -8,11 +8,25 @@ import (
 	// metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
+func removeMatchingProperties_test_fn[T any](jsonpath string, in *ChangeSet[T], want *ChangeSet[T], wantErr bool, t *testing.T) {
+	if err := in.removeMatchingProperties(jsonpath); (err != nil) != wantErr {
+		t.Errorf("ChangeSet_removeMatchingProperties() error = %v, wantErr %v", err, wantErr)
+		return
+	}
+	if diff := cmp.Diff(in.current, want.current); len(diff) > 0 {
+		t.Errorf("ChangeSet_removeMatchingProperties() diff in set.current = %v", diff)
+	}
+	if diff := cmp.Diff(in.desired, want.desired); len(diff) > 0 {
+		t.Errorf("ChangeSet_removeMatchingProperties() diff in set.desired = %v", diff)
+	}
+}
+
 func Test_ChangeSet_removeMatchingProperties(t *testing.T) {
-	tests := []struct {
+
+	tests1 := []struct {
 		name      string
 		changeset *ChangeSet[externalsecretsv1beta1.ExternalSecretSpec]
-		path      string
+		jsonpath  string
 		want      *ChangeSet[externalsecretsv1beta1.ExternalSecretSpec]
 		wantErr   bool
 	}{
@@ -53,7 +67,7 @@ func Test_ChangeSet_removeMatchingProperties(t *testing.T) {
 					},
 				},
 			},
-			path: ".data[*].remoteRef.metadataPolicy",
+			jsonpath: ".data[*].remoteRef.metadataPolicy",
 			want: &ChangeSet[externalsecretsv1beta1.ExternalSecretSpec]{
 				path: "spec",
 				current: &externalsecretsv1beta1.ExternalSecretSpec{
@@ -89,18 +103,44 @@ func Test_ChangeSet_removeMatchingProperties(t *testing.T) {
 			wantErr: false,
 		},
 	}
-	for _, tt := range tests {
+	for _, tt := range tests1 {
 		t.Run(tt.name, func(t *testing.T) {
-			if err := tt.changeset.removeMatchingProperties(tt.path); (err != nil) != tt.wantErr {
-				t.Errorf("ChangeSet_removeMatchingProperties() error = %v, wantErr %v", err, tt.wantErr)
-				return
-			}
-			if diff := cmp.Diff(tt.changeset.current, tt.want.current); len(diff) > 0 {
-				t.Errorf("ChangeSet_removeMatchingProperties() diff in set.current = %v", diff)
-			}
-			if diff := cmp.Diff(tt.changeset.desired, tt.want.desired); len(diff) > 0 {
-				t.Errorf("ChangeSet_removeMatchingProperties() diff in set.desired = %v", diff)
-			}
+			removeMatchingProperties_test_fn(tt.jsonpath, tt.changeset, tt.want, tt.wantErr, t)
+		})
+	}
+
+	tests2 := []struct {
+		name      string
+		changeset *ChangeSet[map[string]string]
+		jsonpath  string
+		want      *ChangeSet[map[string]string]
+		wantErr   bool
+	}{
+		{
+			name: "",
+			changeset: &ChangeSet[map[string]string]{
+				path: "metadata.annotations",
+				current: &map[string]string{
+					"deployment.kubernetes.io/revision": "36",
+				},
+				desired: &map[string]string{
+					"key": "value",
+				},
+			},
+			jsonpath: `['deployment.kubernetes.io/revision']`,
+			want: &ChangeSet[map[string]string]{
+				path:    "metadata.annotations",
+				current: &map[string]string{},
+				desired: &map[string]string{
+					"key": "value",
+				},
+			},
+			wantErr: false,
+		},
+	}
+	for _, tt := range tests2 {
+		t.Run(tt.name, func(t *testing.T) {
+			removeMatchingProperties_test_fn(tt.jsonpath, tt.changeset, tt.want, tt.wantErr, t)
 		})
 	}
 }

@@ -28,16 +28,16 @@ func EnsureDesired(logger logr.Logger, changeSets ...ReconcilableProperty) bool 
 	return changed
 }
 
-type IgnoreJsonPath string
+type IgnoreNested string
 
 type ChangeSet[T any] struct {
 	path    string
 	current *T
 	desired *T
-	ignore  []IgnoreJsonPath
+	ignore  []IgnoreNested
 }
 
-func NewChangeSet[T any](path string, current *T, desired *T, ignore ...IgnoreJsonPath) *ChangeSet[T] {
+func NewChangeSet[T any](path string, current *T, desired *T, ignore ...IgnoreNested) *ChangeSet[T] {
 	return &ChangeSet[T]{path: path, current: current, desired: desired, ignore: ignore}
 }
 
