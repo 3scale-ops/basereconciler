@@ -89,10 +89,9 @@ func (sts StatefulSetTemplate) ResourceReconciler(ctx context.Context, cl client
 		property.NewChangeSet[[]corev1.PersistentVolumeClaim]("spec.volumeClaimTemplates", &instance.Spec.VolumeClaimTemplates, &desired.Spec.VolumeClaimTemplates),
 		property.NewChangeSet[map[string]string]("spec.template.metadata.labels", &instance.Spec.Template.ObjectMeta.Labels, &desired.Spec.Template.ObjectMeta.Labels),
 		property.NewChangeSet[map[string]string]("spec.template.metadata.annotations", &instance.Spec.Template.ObjectMeta.Annotations, &desired.Spec.Template.ObjectMeta.Annotations),
-		property.NewChangeSet[corev1.PodSpec]("spec.template.spec", &instance.Spec.Template.Spec, &desired.Spec.Template.Spec,
-			property.IgnoreNested("spec.template.spec.dnsPolicy"),
-			property.IgnoreNested("spec.template.spec.schedulerName"),
-		),
+		property.NewChangeSet[corev1.PodSpec]("spec.template.spec", &instance.Spec.Template.Spec, &desired.Spec.Template.Spec), // property.IgnoreNested("spec.template.spec.dnsPolicy"),
+		// property.IgnoreNested("spec.template.spec.schedulerName"),
+
 	)
 
 	if needsUpdate {

@@ -2,15 +2,10 @@ package resources
 
 import (
 	"context"
-	"fmt"
 
-	"github.com/3scale-ops/basereconciler/property"
 	"github.com/3scale-ops/basereconciler/reconciler"
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/api/errors"
-	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/log"
 )
 
 var _ reconciler.Resource = ServiceTemplate{}
@@ -23,14 +18,7 @@ type ServiceTemplate struct {
 
 // Build returns a Service resource
 func (st ServiceTemplate) Build(ctx context.Context, cl client.Client) (client.Object, error) {
-
-	svc := st.Template()
-
-	// if err := populateServiceSpecRuntimeValues(ctx, cl, svc); err != nil {
-	// 	return nil, err
-	// }
-
-	return svc.DeepCopy(), nil
+	return st.Template().DeepCopy(), nil
 }
 
 // Enabled indicates if the resource should be present or not
@@ -40,90 +28,63 @@ func (dt ServiceTemplate) Enabled() bool {
 
 // ResourceReconciler implements a generic reconciler for Service resources
 func (st ServiceTemplate) ResourceReconciler(ctx context.Context, cl client.Client, obj client.Object) error {
-	logger := log.FromContext(ctx, "kind", "Service", "resource", obj.GetName())
 
-	needsUpdate := false
-	desired := obj.(*corev1.Service)
-
-	instance := &corev1.Service{}
-	err := cl.Get(ctx, types.NamespacedName{Name: desired.GetName(), Namespace: desired.GetNamespace()}, instance)
-	if err != nil {
-		if errors.IsNotFound(err) {
-			err = cl.Create(ctx, desired)
-			if err != nil {
-				return fmt.Errorf("unable to create object: " + err.Error())
-			}
-			logger.Info("resource created")
-			return nil
-		}
-		return err
-	}
-
-	/* Ensure the resource is in its desired state */
-	needsUpdate = property.EnsureDesired(logger,
-		property.NewChangeSet[map[string]string]("metadata.labels", &instance.ObjectMeta.Labels, &desired.ObjectMeta.Labels),
-		property.NewChangeSet[map[string]string]("metadata.annotations", &instance.ObjectMeta.Annotations, &desired.ObjectMeta.Annotations),
-		property.NewChangeSet[corev1.ServiceType]("spec.type", &instance.Spec.Type, &desired.Spec.Type),
-		property.NewChangeSet[[]corev1.ServicePort]("spec.ports", &instance.Spec.Ports, &desired.Spec.Ports,
-			property.IgnoreNested("spec.ports[*].nodePort"),
-		),
-		property.NewChangeSet[map[string]string]("spec.selector", &instance.Spec.Selector, &desired.Spec.Selector),
+	return ResourceReconciler[corev1.Service, *corev1.Service](
+		ctx, cl, obj.(*corev1.Service), st.Enabled(),
+		ResourceReconcilerConfig{
+			ReconcileProperties: []Property{
+				"metadata.labels",
+				"metadata.annotations",
+				"spec.type",
+				"spec.ports",
+				"spec.selector",
+			},
+			// IgnoreProperties: []Property{
+			// 	"spec.ports[*].nodePort",
+			// },
+		},
+		populateServiceSpecRuntimeValues(),
 	)
 
-	if needsUpdate {
-		err := cl.Update(ctx, instance)
-		if err != nil {
-			return err
-		}
-		logger.Info("resource updated")
-	}
-
-	return nil
 }
 
-// func populateServiceSpecRuntimeValues(ctx context.Context, cl client.Client, svc *corev1.Service) error {
+func populateServiceSpecRuntimeValues() MutationFunction {
 
-// 	instance := &corev1.Service{}
-// 	err := cl.Get(ctx, types.NamespacedName{Name: svc.GetName(), Namespace: svc.GetNamespace()}, instance)
-// 	if err != nil {
-// 		if errors.IsNotFound(err) {
-// 			// Resource not found, return the template as is
-// 			// because there are not runtime values yet
-// 			return nil
-// 		}
-// 		return err
-// 	}
+	return func(ctx context.Context, cl client.Client, instance client.Object, desired client.Object) error {
 
-// 	// Set runtime values in the resource:
-// 	// "/spec/clusterIP", "/spec/clusterIPs", "/spec/ipFamilies", "/spec/ipFamilyPolicy", "/spec/ports/*/nodePort"
-// 	svc.Spec.ClusterIP = instance.Spec.ClusterIP
-// 	svc.Spec.ClusterIPs = instance.Spec.ClusterIPs
-// 	svc.Spec.IPFamilies = instance.Spec.IPFamilies
-// 	svc.Spec.IPFamilyPolicy = instance.Spec.IPFamilyPolicy
+		isvc := instance.(*corev1.Service)
+		dsvc := desired.(*corev1.Service)
 
-// 	// For services that are not ClusterIP we need to populate the runtime values
-// 	// of NodePort for each port
-// 	if svc.Spec.Type != corev1.ServiceTypeClusterIP {
-// 		for idx, port := range svc.Spec.Ports {
-// 			runtimePort := findPort(port.Port, port.Protocol, instance.Spec.Ports)
-// 			if runtimePort != nil {
-// 				svc.Spec.Ports[idx].NodePort = runtimePort.NodePort
-// 			}
-// 		}
-// 	}
+		// Set runtime values in the resource:
+		// "/spec/clusterIP", "/spec/clusterIPs", "/spec/ipFamilies", "/spec/ipFamilyPolicy", "/spec/ports/*/nodePort"
+		dsvc.Spec.ClusterIP = isvc.Spec.ClusterIP
+		dsvc.Spec.ClusterIPs = isvc.Spec.ClusterIPs
+		dsvc.Spec.IPFamilies = isvc.Spec.IPFamilies
+		dsvc.Spec.IPFamilyPolicy = isvc.Spec.IPFamilyPolicy
 
-// 	return nil
-// }
+		// For services that are not ClusterIP we need to populate the runtime values
+		// of NodePort for each port
+		if dsvc.Spec.Type != corev1.ServiceTypeClusterIP {
+			for idx, port := range dsvc.Spec.Ports {
+				runtimePort := findPort(port.Port, port.Protocol, isvc.Spec.Ports)
+				if runtimePort != nil {
+					dsvc.Spec.Ports[idx].NodePort = runtimePort.NodePort
+				}
+			}
+		}
+		return nil
+	}
+}
 
-// func findPort(pNumber int32, pProtocol corev1.Protocol, ports []corev1.ServicePort) *corev1.ServicePort {
-// 	// Ports within a svc are uniquely identified by
-// 	// the "port" and "protocol" fields. This is documented in
-// 	// k8s API reference
-// 	for _, port := range ports {
-// 		if pNumber == port.Port && pProtocol == port.Protocol {
-// 			return &port
-// 		}
-// 	}
-// 	// not found
-// 	return nil
-// }
+func findPort(pNumber int32, pProtocol corev1.Protocol, ports []corev1.ServicePort) *corev1.ServicePort {
+	// Ports within a svc are uniquely identified by
+	// the "port" and "protocol" fields. This is documented in
+	// k8s API reference
+	for _, port := range ports {
+		if pNumber == port.Port && pProtocol == port.Protocol {
+			return &port
+		}
+	}
+	// not found
+	return nil
+}

@@ -84,19 +84,17 @@ func (dep DeploymentTemplate) ResourceReconciler(ctx context.Context, cl client.
 	/* Ensure the resource is in its desired state */
 	needsUpdate = property.EnsureDesired(logger,
 		property.NewChangeSet[map[string]string]("metadata.labels", &instance.ObjectMeta.Labels, &desired.ObjectMeta.Labels),
-		property.NewChangeSet[map[string]string]("metadata.annotations", &instance.ObjectMeta.Annotations, &desired.ObjectMeta.Annotations,
-			property.IgnoreNested(`metadata.annotations['deployment.kubernetes.io/revision']`),
-		),
+		property.NewChangeSet[map[string]string]("metadata.annotations", &instance.ObjectMeta.Annotations, &desired.ObjectMeta.Annotations), // property.IgnoreNested(`metadata.annotations['deployment.kubernetes.io/revision']`),
+
 		property.NewChangeSet[int32]("spec.minReadySeconds", &instance.Spec.MinReadySeconds, &desired.Spec.MinReadySeconds),
 		property.NewChangeSet[int32]("spec.replicas", instance.Spec.Replicas, desired.Spec.Replicas),
 		property.NewChangeSet[metav1.LabelSelector]("spec.selector", instance.Spec.Selector, desired.Spec.Selector),
 		property.NewChangeSet[appsv1.DeploymentStrategy]("spec.strategy", &instance.Spec.Strategy, &desired.Spec.Strategy),
 		property.NewChangeSet[map[string]string]("spec.template.metadata.labels", &instance.Spec.Template.ObjectMeta.Labels, &desired.Spec.Template.ObjectMeta.Labels),
 		property.NewChangeSet[map[string]string]("spec.template.metadata.annotations", &instance.Spec.Template.ObjectMeta.Annotations, &desired.Spec.Template.ObjectMeta.Annotations),
-		property.NewChangeSet[corev1.PodSpec]("spec.template.spec", &instance.Spec.Template.Spec, &desired.Spec.Template.Spec,
-			property.IgnoreNested("spec.template.spec.dnsPolicy"),
-			property.IgnoreNested("spec.template.spec.schedulerName"),
-		),
+		property.NewChangeSet[corev1.PodSpec]("spec.template.spec", &instance.Spec.Template.Spec, &desired.Spec.Template.Spec), // property.IgnoreNested("spec.template.spec.dnsPolicy"),
+		// property.IgnoreNested("spec.template.spec.schedulerName"),
+
 	)
 
 	if needsUpdate {
