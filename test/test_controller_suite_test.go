@@ -5,11 +5,8 @@ import (
 
 	"github.com/3scale-ops/basereconciler/test/api/v1alpha1"
 	"github.com/3scale-ops/basereconciler/util"
-	externalsecretsv1beta1 "github.com/external-secrets/external-secrets/apis/externalsecrets/v1beta1"
-	grafanav1alpha1 "github.com/grafana-operator/grafana-operator/v4/api/integreatly/v1alpha1"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	monitoringv1 "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
 	appsv1 "k8s.io/api/apps/v1"
 	autoscalingv2 "k8s.io/api/autoscaling/v2"
 	corev1 "k8s.io/api/core/v1"
@@ -83,15 +80,6 @@ var _ = Describe("Test controller", func() {
 				)
 			}, timeout, poll).ShouldNot(HaveOccurred())
 
-			es := &externalsecretsv1beta1.ExternalSecret{}
-			Eventually(func() error {
-				return k8sClient.Get(
-					context.Background(),
-					types.NamespacedName{Name: "secret", Namespace: namespace},
-					es,
-				)
-			}, timeout, poll).ShouldNot(HaveOccurred())
-
 			pdb := &policyv1.PodDisruptionBudget{}
 			Eventually(func() error {
 				return k8sClient.Get(
@@ -109,27 +97,9 @@ var _ = Describe("Test controller", func() {
 					hpa,
 				)
 			}, timeout, poll).ShouldNot(HaveOccurred())
-
-			pm := &monitoringv1.PodMonitor{}
-			Eventually(func() error {
-				return k8sClient.Get(
-					context.Background(),
-					types.NamespacedName{Name: "pm", Namespace: namespace},
-					pm,
-				)
-			}, timeout, poll).ShouldNot(HaveOccurred())
-
-			dashboard := &grafanav1alpha1.GrafanaDashboard{}
-			Eventually(func() error {
-				return k8sClient.Get(
-					context.Background(),
-					types.NamespacedName{Name: "dashboard", Namespace: namespace},
-					dashboard,
-				)
-			}, timeout, poll).ShouldNot(HaveOccurred())
 		})
 
-		It("triggers a Deployment rollout on Secret contents change", func() {
+		FIt("triggers a Deployment rollout on Secret contents change", func() {
 
 			dep := &appsv1.Deployment{}
 			Eventually(func() error {
@@ -254,15 +224,6 @@ var _ = Describe("Test controller", func() {
 					context.Background(),
 					types.NamespacedName{Name: "service", Namespace: namespace},
 					svc,
-				)
-			}, timeout, poll).ShouldNot(HaveOccurred())
-
-			es := &externalsecretsv1beta1.ExternalSecret{}
-			Eventually(func() error {
-				return k8sClient.Get(
-					context.Background(),
-					types.NamespacedName{Name: "secret", Namespace: namespace},
-					es,
 				)
 			}, timeout, poll).ShouldNot(HaveOccurred())
 

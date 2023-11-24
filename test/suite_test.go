@@ -25,6 +25,7 @@ import (
 	"time"
 
 	"github.com/3scale-ops/basereconciler/reconciler"
+	"github.com/3scale-ops/basereconciler/util"
 	"github.com/goombaio/namegenerator"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -64,7 +65,7 @@ func TestAPIs(t *testing.T) {
 }
 
 var _ = BeforeSuite(func() {
-	logf.SetLogger(zap.New(zap.WriteTo(GinkgoWriter), zap.UseDevMode(false)))
+	logf.SetLogger(zap.New(zap.WriteTo(GinkgoWriter), zap.UseDevMode(true)))
 
 	By("bootstrapping test environment")
 	testEnv = &envtest.Environment{
@@ -72,7 +73,7 @@ var _ = BeforeSuite(func() {
 			filepath.Join("api", "v1alpha1"),
 			filepath.Join("external-apis"),
 		},
-		// UseExistingCluster: pointer.Bool(true),
+		UseExistingCluster: util.Pointer(true),
 	}
 
 	nBig, err := rand.Int(rand.Reader, big.NewInt(1000000))

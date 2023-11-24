@@ -1,16 +1,22 @@
-package reconciler
+package status
 
 import (
 	"context"
 
-	"github.com/3scale-ops/basereconciler/status"
 	appsv1 "k8s.io/api/apps/v1"
 	"k8s.io/apimachinery/pkg/api/equality"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 )
 
-func (r *Reconciler) ReconcileStatus(ctx context.Context, instance status.ObjectWithAppStatus,
+type Reconciler struct {
+	client.Client
+	Scheme *runtime.Scheme
+}
+
+func (r *Reconciler) ReconcileStatus(ctx context.Context, instance ObjectWithAppStatus,
 	deployments, statefulsets []types.NamespacedName, mutators ...func() bool) error {
 	logger := log.FromContext(ctx)
 	update := false
