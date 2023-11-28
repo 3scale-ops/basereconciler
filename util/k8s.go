@@ -1,8 +1,11 @@
 package util
 
 import (
+	"fmt"
 	"reflect"
 
+	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
@@ -31,4 +34,16 @@ func GetItems(list client.ObjectList) []client.Object {
 
 func IsBeingDeleted(o client.Object) bool {
 	return !o.GetDeletionTimestamp().IsZero()
+}
+
+func NewFromGVK(gvk schema.GroupVersionKind, s *runtime.Scheme) (client.Object, error) {
+	o, err := s.New(gvk)
+	if err != nil {
+		return nil, err
+	}
+	new, ok := o.(client.Object)
+	if !ok {
+		return nil, fmt.Errorf("runtime object %T does not implement client.Object", o)
+	}
+	return new, nil
 }

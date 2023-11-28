@@ -3,7 +3,6 @@ package resource
 import (
 	"fmt"
 
-	"github.com/davecgh/go-spew/spew"
 	"github.com/go-logr/logr"
 	"github.com/google/go-cmp/cmp"
 	"github.com/ohler55/ojg/jp"
@@ -39,13 +38,13 @@ func (p Property) Reconcile(target, desired map[string]any, logger logr.Logger) 
 	// 	return false, nil
 	// }
 
-	if p == "metadata.annotations" {
-		spew.Printf("\n#### metadata.annotations: \n")
-		// spew.Printf("\t %+v\n", val)
-		// spew.Printf("\t %+v\n", desiredVal)
-		spew.Dump(val)
-		spew.Dump(desiredVal)
-	}
+	// if p == "metadata.annotations" {
+	// 	spew.Printf("\n#### metadata.annotations: \n")
+	// 	// spew.Printf("\t %+v\n", val)
+	// 	// spew.Printf("\t %+v\n", desiredVal)
+	// 	spew.Dump(val)
+	// 	spew.Dump(desiredVal)
+	// }
 
 	switch delta(len(desiredVal), len(val)) {
 

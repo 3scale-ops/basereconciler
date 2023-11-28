@@ -69,7 +69,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 		return *result, err
 	}
 
-	err = r.ReconcileOwnedResources(ctx, instance, []reconciler.Resource{
+	err = r.ReconcileOwnedResources(ctx, instance, []resource.TemplateInterface{
 		resource.Template[*appsv1.Deployment]{
 			Builder:   deployment(req.Namespace),
 			IsEnabled: true,
@@ -124,18 +124,18 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 		// 	},
 		// },
 
-		resource.Template[*autoscalingv2.HorizontalPodAutoscaler]{
-			Builder:   hpa(req.Namespace),
-			IsEnabled: instance.Spec.HPA != nil && *instance.Spec.HPA,
-			ReconcileProperties: []resource.Property{
-				"metadata.annotations",
-				"metadata.labels",
-				"spec.scaleTargetRef",
-				"spec.minReplicas",
-				"spec.maxReplicas",
-				"spec.metrics",
-			},
-		},
+		// resource.Template[*autoscalingv2.HorizontalPodAutoscaler]{
+		// 	Builder:   hpa(req.Namespace),
+		// 	IsEnabled: instance.Spec.HPA != nil && *instance.Spec.HPA,
+		// 	ReconcileProperties: []resource.Property{
+		// 		"metadata.annotations",
+		// 		"metadata.labels",
+		// 		"spec.scaleTargetRef",
+		// 		"spec.minReplicas",
+		// 		"spec.maxReplicas",
+		// 		"spec.metrics",
+		// 	},
+		// },
 		// resource.Template[*policyv1.PodDisruptionBudget]{
 		// 	Builder:   pdb(req.Namespace),
 		// 	IsEnabled: instance.Spec.PDB != nil && *instance.Spec.PDB,

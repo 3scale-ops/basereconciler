@@ -23,12 +23,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 )
 
-type Resource interface {
-	Build(ctx context.Context, cl client.Client, o client.Object) (client.Object, error)
-	Enabled() bool
-	ReconcilerConfig() resource.ReconcilerConfig
-}
-
 // Reconciler computes a list of resources that it needs to keep in place
 type Reconciler struct {
 	client.Client
@@ -121,37 +115,28 @@ func (r *Reconciler) ManageCleanupLogic(instance client.Object, fns []func(), lo
 
 // ReconcileOwnedResources handles generalized resource reconcile logic for
 // all controllers
-func (r *Reconciler) ReconcileOwnedResources(ctx context.Context, owner client.Object, list []Resource) error {
+func (r *Reconciler) ReconcileOwnedResources(ctx context.Context, owner client.Object, list []resource.TemplateInterface) error {
 
-	managedResources := []corev1.ObjectReference{}
+	// managedResources := []corev1.ObjectReference{}
 
 	for _, res := range list {
 
-		object, err := res.Build(ctx, r.Client, nil)
-		if err != nil {
+		if err := res.Reconcile(ctx, r.Client, r.Scheme, owner); err != nil {
 			return err
 		}
 
-		if err := controllerutil.SetControllerReference(owner, object, r.Scheme); err != nil {
-			return err
-		}
-
-		if err := res.ReconcilerConfig().Reconcile(ctx, r.Client, r.Scheme, object, res.Enabled()); err != nil {
-			return err
-		}
-
-		managedResources = append(managedResources, corev1.ObjectReference{
-			Namespace: object.GetNamespace(),
-			Name:      object.GetName(),
-			Kind:      reflect.TypeOf(object).Elem().Name(),
-		})
+		// managedResources = append(managedResources, corev1.ObjectReference{
+		// 	Namespace: object.GetNamespace(),
+		// 	Name:      object.GetName(),
+		// 	Kind:      reflect.TypeOf(object).Elem().Name(),
+		// })
 	}
 
-	if r.IsPrunerEnabled(owner) {
-		if err := r.PruneOrphaned(ctx, owner, managedResources); err != nil {
-			return err
-		}
-	}
+	// if r.IsPrunerEnabled(owner) {
+	// 	if err := r.PruneOrphaned(ctx, owner, managedResources); err != nil {
+	// 		return err
+	// 	}
+	// }
 
 	return nil
 }

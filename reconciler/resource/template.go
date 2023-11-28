@@ -3,8 +3,16 @@ package resource
 import (
 	"context"
 
+	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
+
+type TemplateInterface interface {
+	Build(ctx context.Context, cl client.Client, o client.Object) (client.Object, error)
+	Enabled() bool
+	// ReconcilerConfig() ReconcilerConfig
+	Reconcile(context.Context, client.Client, *runtime.Scheme, client.Object) error
+}
 
 type TemplateBuilderFunction[T client.Object] func(client.Object) (T, error)
 
