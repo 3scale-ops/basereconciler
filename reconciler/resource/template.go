@@ -16,6 +16,14 @@ type TemplateInterface interface {
 
 type TemplateBuilderFunction[T client.Object] func(client.Object) (T, error)
 
+type MutationFunction func(context.Context, client.Client, client.Object, client.Object) error
+
+type ReconcilerConfig struct {
+	ReconcileProperties []Property
+	IgnoreProperties    []Property
+	Mutations           []MutationFunction
+}
+
 type Template[T client.Object] struct {
 	Builder             TemplateBuilderFunction[T]
 	IsEnabled           bool
