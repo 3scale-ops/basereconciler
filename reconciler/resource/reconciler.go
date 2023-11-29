@@ -2,10 +2,11 @@ package resource
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 
 	"github.com/3scale-ops/basereconciler/util"
-	"github.com/google/go-cmp/cmp"
+	"github.com/nsf/jsondiff"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/equality"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -109,9 +110,8 @@ func CreateOrUpdate(ctx context.Context, cl client.Client, scheme *runtime.Schem
 	if err := runtime.DefaultUnstructuredConverter.FromUnstructured(udiff, diff); err != nil {
 		return nil, fmt.Errorf("unable to convert diff from unstructured: %w", err)
 	}
-
 	if !equality.Semantic.DeepEqual(diff, desired) {
-		logger.Info("resource required update", "diff", cmp.Diff(diff, desired))
+		logger.V(1).Info("resource update required", "diff", printfDiff(diff, desired))
 		err := cl.Update(ctx, client.Object(&unstructured.Unstructured{Object: uinstance}))
 		if err != nil {
 			return nil, err
@@ -120,4 +120,20 @@ func CreateOrUpdate(ctx context.Context, cl client.Client, scheme *runtime.Schem
 	}
 
 	return util.ObjectReference(instance, gvk), nil
+}
+
+func printfDiff(a, b client.Object) string {
+	ajson, err := json.Marshal(a)
+	if err != nil {
+		return fmt.Errorf("unsable to log differences: %w", err).Error()
+	}
+	bjson, err := json.Marshal(b)
+	if err != nil {
+		return fmt.Errorf("unsable to log differences: %w", err).Error()
+	}
+	opts := jsondiff.DefaultJSONOptions()
+	opts.SkipMatches = true
+	opts.Indent = "\t"
+	_, diff := jsondiff.Compare(ajson, bjson, &opts)
+	return diff
 }

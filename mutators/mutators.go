@@ -2,65 +2,68 @@ package mutators
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/3scale-ops/basereconciler/reconciler/resource"
+	"github.com/3scale-ops/basereconciler/util"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
+func RetrieveLiveObject[T client.Object](ctx context.Context, cl client.Client, o client.Object) (T, error) {
+	desired := o.(T)
+	live := desired.DeepCopyObject().(client.Object)
+	if err := cl.Get(ctx, util.ObjectKey(desired), live); err != nil {
+		return live.(T), fmt.Errorf("unable to retrieve live object: %w", err)
+	}
+	return live.(T), nil
+}
+
 // reconcileDeploymentReplicas reconciles the number of replicas of a Deployment
 func ReconcileDeploymentReplicas(enforce bool) resource.TemplateMutationFunction {
-	return func(ctx context.Context, cl client.Client, instance client.Object, desired client.Object) error {
+	return func(ctx context.Context, cl client.Client, desired client.Object) error {
 		if enforce {
 			// Let the value in the template
 			// override the runtime value
 			return nil
 		}
 
-		idep := instance.(*appsv1.Deployment)
-		ddep := desired.(*appsv1.Deployment)
+		live, err := RetrieveLiveObject[*appsv1.Deployment](ctx, cl, desired)
+		if err != nil {
+			return err
+		}
 
 		// override the value in the template with the
 		// runtime value
-		ddep.Spec.Replicas = idep.Spec.Replicas
+		desired.(*appsv1.Deployment).Spec.Replicas = live.Spec.Replicas
 		return nil
 	}
 }
 
-// // ReconcileDeploymentRevisionAnnotation reconciles the number of replicas of a Deployment
-// func ReconcileDeploymentRevisionAnnotation() resource.MutationFunction {
-// 	return func(ctx context.Context, cl client.Client, instance client.Object, desired client.Object) error {
-// 		idep := instance.(*appsv1.Deployment)
-// 		ddep := desired.(*appsv1.Deployment)
-
-// 		if
-// 		ddep.ObjectMeta.Annotations["deployment.kubernetes.io/revision"]
-// 		= idep.ObjectMeta.Annotations["deployment.kubernetes.io/revision"]
-// 		return nil
-// 	}
-// }
-
 func ReconcileServiceNodePorts() resource.TemplateMutationFunction {
-	return func(ctx context.Context, cl client.Client, instance client.Object, desired client.Object) error {
+	return func(ctx context.Context, cl client.Client, desired client.Object) error {
 
-		isvc := instance.(*corev1.Service)
-		dsvc := desired.(*corev1.Service)
+		svc := desired.(*corev1.Service)
+		live, err := RetrieveLiveObject[*corev1.Service](ctx, cl, desired)
+		if err != nil {
+			return err
+		}
 
 		// // Set runtime values in the resource:
-		// // "/spec/clusterIP", "/spec/clusterIPs", "/spec/ipFamilies", "/spec/ipFamilyPolicy", "/spec/ports/*/nodePort"
-		// dsvc.Spec.ClusterIP = isvc.Spec.ClusterIP
-		// dsvc.Spec.ClusterIPs = isvc.Spec.ClusterIPs
-		// dsvc.Spec.IPFamilies = isvc.Spec.IPFamilies
-		// dsvc.Spec.IPFamilyPolicy = isvc.Spec.IPFamilyPolicy
+		// "/spec/clusterIP", "/spec/clusterIPs", "/spec/ipFamilies", "/spec/ipFamilyPolicy", "/spec/ports/*/nodePort"
+		svc.Spec.ClusterIP = live.Spec.ClusterIP
+		svc.Spec.ClusterIPs = live.Spec.ClusterIPs
+		svc.Spec.IPFamilies = live.Spec.IPFamilies
+		svc.Spec.IPFamilyPolicy = live.Spec.IPFamilyPolicy
 
 		// For services that are not ClusterIP we need to populate the runtime values
 		// of NodePort for each port
-		if dsvc.Spec.Type != corev1.ServiceTypeClusterIP {
-			for idx, port := range dsvc.Spec.Ports {
-				runtimePort := findPort(port.Port, port.Protocol, isvc.Spec.Ports)
+		if svc.Spec.Type != corev1.ServiceTypeClusterIP {
+			for idx, port := range svc.Spec.Ports {
+				runtimePort := findPort(port.Port, port.Protocol, live.Spec.Ports)
 				if runtimePort != nil {
-					dsvc.Spec.Ports[idx].NodePort = runtimePort.NodePort
+					svc.Spec.Ports[idx].NodePort = runtimePort.NodePort
 				}
 			}
 		}

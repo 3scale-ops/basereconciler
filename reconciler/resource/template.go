@@ -14,7 +14,7 @@ type TemplateInterface interface {
 
 type TemplateBuilderFunction[T client.Object] func(client.Object) (T, error)
 
-type TemplateMutationFunction func(context.Context, client.Client, client.Object, client.Object) error
+type TemplateMutationFunction func(context.Context, client.Client, client.Object) error
 
 type ReconcilerConfig struct {
 	ReconcileProperties []Property
@@ -31,7 +31,16 @@ type Template[T client.Object] struct {
 
 // Build returns a T resource by executing its template function
 func (t Template[T]) Build(ctx context.Context, cl client.Client, o client.Object) (client.Object, error) {
-	return t.TemplateBuilder(o)
+	o, err := t.TemplateBuilder(o)
+	if err != nil {
+		return nil, err
+	}
+	for _, fn := range t.TemplateMutations {
+		if err := fn(ctx, cl, o); err != nil {
+			return nil, err
+		}
+	}
+	return o, nil
 }
 
 // Enabled indicates if the resource should be present or not

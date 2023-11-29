@@ -94,7 +94,6 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 				"spec.template.spec.containers[*].terminationMessagePolicy",
 			},
 			TemplateMutations: []resource.TemplateMutationFunction{
-				// mutators.ReconcileDeploymentRevisionAnnotation(),
 				mutators.ReconcileDeploymentReplicas(true),
 				mutators.RolloutTrigger{
 					Name:       "secret",
