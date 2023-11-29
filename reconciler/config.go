@@ -2,7 +2,6 @@ package reconciler
 
 import (
 	"github.com/3scale-ops/basereconciler/reconciler/resource"
-	"k8s.io/apimachinery/pkg/runtime/schema"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -24,6 +23,27 @@ type ReconcilerConfig struct {
 	ResourceReconcilerConfig map[string]resource.ReconcilerConfig
 }
 
-func (opt ReconcilerConfig) ResourceConfigForGVK(gvk schema.GroupVersionKind) resource.ReconcilerConfig {
-	return opt.ResourceReconcilerConfig[gvk.String()]
+// func (opt ReconcilerConfig) ResourceConfigForGVK(gvk schema.GroupVersionKind) resource.ReconcilerConfig {
+// 	return opt.ResourceReconcilerConfig[gvk.String()]
+// }
+
+var Config ReconcilerConfig = ReconcilerConfig{
+	AnnotationsDomain: "basereconciler.3cale.net",
+	ResourcePruner:    true,
+	ManagedTypes:      ReconcilerManagedTypes{
+		// &corev1.ServiceList{},
+		// &corev1.ConfigMapList{},
+		// &appsv1.DeploymentList{},
+		// &appsv1.StatefulSetList{},
+		// &externalsecretsv1beta1.ExternalSecretList{},
+		// &grafanav1alpha1.GrafanaDashboardList{},
+		// &autoscalingv2.HorizontalPodAutoscalerList{},
+		// &policyv1.PodDisruptionBudgetList{},
+		// &monitoringv1.PodMonitorList{},
+		// &rbacv1.RoleBindingList{},
+		// &rbacv1.RoleList{},
+		// &corev1.ServiceAccountList{},
+		// &pipelinev1beta1.PipelineList{},
+		// &pipelinev1beta1.TaskList{},
+	},
 }

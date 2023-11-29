@@ -111,6 +111,8 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 				"spec.type",
 				"spec.selector",
 				"spec.ports",
+				"spec.clusterIP",
+				// "/spec/clusterIP", "/spec/clusterIPs", "/spec/ipFamilies", "/spec/ipFamilyPolicy", "/spec/ports/*/nodePort"
 			},
 			TemplateMutations: []resource.TemplateMutationFunction{
 				mutators.ReconcileServiceNodePorts(),
@@ -148,11 +150,11 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 	}
 
 	// reconcile the status
-	// err = r.ReconcileStatus(ctx, instance,
-	// 	[]types.NamespacedName{{Name: "deployment", Namespace: instance.GetNamespace()}}, nil)
-	// if err != nil {
-	// 	return ctrl.Result{}, err
-	// }
+	err = r.ReconcileStatus(ctx, instance,
+		[]types.NamespacedName{{Name: "deployment", Namespace: instance.GetNamespace()}}, nil)
+	if err != nil {
+		return ctrl.Result{}, err
+	}
 
 	return ctrl.Result{}, nil
 }
@@ -219,7 +221,7 @@ func service(namespace string, annotations map[string]string) resource.TemplateB
 				Annotations: annotations,
 			},
 			Spec: corev1.ServiceSpec{
-				Type: corev1.ServiceTypeLoadBalancer,
+				Type: corev1.ServiceTypeClusterIP,
 				Ports: []corev1.ServicePort{{
 					Name: "port", Port: 80, TargetPort: intstr.FromInt(80), Protocol: corev1.ProtocolTCP}},
 				Selector: map[string]string{"selector": "deployment"},

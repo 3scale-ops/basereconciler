@@ -20,7 +20,7 @@ limitations under the License.
 package v1alpha1
 
 import (
-	"github.com/3scale-ops/basereconciler/reconciler/status"
+	"github.com/3scale-ops/basereconciler/status"
 	appsv1 "k8s.io/api/apps/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"

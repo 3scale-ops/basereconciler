@@ -37,13 +37,8 @@ var _ = Describe("Test controller", func() {
 
 	AfterEach(func() {
 		n := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: namespace}}
-		err := k8sClient.Delete(context.Background(), n)
+		err := k8sClient.Delete(context.Background(), n, client.PropagationPolicy(metav1.DeletePropagationForeground))
 		Expect(err).ToNot(HaveOccurred())
-
-		Eventually(func() error {
-			return k8sClient.Get(context.Background(), types.NamespacedName{Name: namespace}, n)
-		}, timeout, poll).Should(HaveOccurred())
-
 	})
 
 	Context("Creates resources", func() {
@@ -62,6 +57,10 @@ var _ = Describe("Test controller", func() {
 			Eventually(func() error {
 				return k8sClient.Get(context.Background(), types.NamespacedName{Name: "instance", Namespace: namespace}, instance)
 			}, timeout, poll).ShouldNot(HaveOccurred())
+		})
+
+		AfterEach(func() {
+			k8sClient.Delete(context.Background(), instance, client.PropagationPolicy(metav1.DeletePropagationForeground))
 		})
 
 		It("creates the required resources", func() {
@@ -103,7 +102,7 @@ var _ = Describe("Test controller", func() {
 			}, timeout, poll).ShouldNot(HaveOccurred())
 		})
 
-		FIt("triggers a Deployment rollout on Secret contents change", func() {
+		It("triggers a Deployment rollout on Secret contents change", func() {
 
 			dep := &appsv1.Deployment{}
 			Eventually(func() error {

@@ -90,10 +90,10 @@ func Test_isPrunerEnabled(t *testing.T) {
 		owner client.Object
 	}
 	tests := []struct {
-		name string
-		args args
-		r    Reconciler
-		want bool
+		name    string
+		args    args
+		preExec func()
+		want    bool
 	}{
 		{
 			name: "Returns true",
@@ -102,8 +102,8 @@ func Test_isPrunerEnabled(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{Name: "test", Namespace: "ns"},
 				},
 			},
-			r:    Reconciler{},
-			want: true,
+			preExec: func() {},
+			want:    true,
 		},
 		{
 			name: "Disabled by annotation",
@@ -114,21 +114,22 @@ func Test_isPrunerEnabled(t *testing.T) {
 					},
 				},
 			},
-			r:    Reconciler{Config: ReconcilerConfig{AnnotationsDomain: "example.com"}},
-			want: false,
+			preExec: func() { Config.AnnotationsDomain = "example.com" },
+			want:    false,
 		},
 		{
 			name: "Disabled by config",
 			args: args{
 				owner: &corev1.Service{},
 			},
-			r:    Reconciler{Config: ReconcilerConfig{ResourcePruner: false}},
-			want: false,
+			preExec: func() { Config.ResourcePruner = false },
+			want:    false,
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := tt.r.IsPrunerEnabled(tt.args.owner); got != tt.want {
+			tt.preExec()
+			if got := isPrunerEnabled(tt.args.owner); got != tt.want {
 				t.Errorf("isPrunerEnabled() = %v, want %v", got, tt.want)
 			}
 		})

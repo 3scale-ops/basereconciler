@@ -7,7 +7,6 @@ import (
 	"strconv"
 
 	"github.com/3scale-ops/basereconciler/reconciler/resource"
-	"github.com/3scale-ops/basereconciler/reconciler/status"
 	"github.com/3scale-ops/basereconciler/util"
 	"github.com/go-logr/logr"
 	corev1 "k8s.io/api/core/v1"
@@ -27,8 +26,6 @@ import (
 type Reconciler struct {
 	client.Client
 	Scheme *runtime.Scheme
-	status.Reconciler
-	Config ReconcilerConfig
 }
 
 func NewFromManager(mgr manager.Manager) Reconciler {
@@ -129,7 +126,7 @@ func (r *Reconciler) ReconcileOwnedResources(ctx context.Context, owner client.O
 		}
 	}
 
-	if r.IsPrunerEnabled(owner) {
+	if isPrunerEnabled(owner) {
 		if err := r.PruneOrphaned(ctx, owner, managedResources); err != nil {
 			return err
 		}
@@ -138,12 +135,12 @@ func (r *Reconciler) ReconcileOwnedResources(ctx context.Context, owner client.O
 	return nil
 }
 
-func (r *Reconciler) IsPrunerEnabled(owner client.Object) bool {
+func isPrunerEnabled(owner client.Object) bool {
 	// prune is active by default
 	prune := true
 
 	// get the per resource switch (annotation)
-	if value, ok := owner.GetAnnotations()[fmt.Sprintf("%s/prune", r.Config.AnnotationsDomain)]; ok {
+	if value, ok := owner.GetAnnotations()[fmt.Sprintf("%s/prune", Config.AnnotationsDomain)]; ok {
 		var err error
 		prune, err = strconv.ParseBool(value)
 		if err != nil {
@@ -151,13 +148,13 @@ func (r *Reconciler) IsPrunerEnabled(owner client.Object) bool {
 		}
 	}
 
-	return prune && r.Config.ResourcePruner
+	return prune && Config.ResourcePruner
 }
 
 func (r *Reconciler) PruneOrphaned(ctx context.Context, owner client.Object, managed []corev1.ObjectReference) error {
 	logger := log.FromContext(ctx)
 
-	for _, lType := range r.Config.ManagedTypes {
+	for _, lType := range Config.ManagedTypes {
 
 		err := r.Client.List(ctx, lType, client.InNamespace(owner.GetNamespace()))
 		if err != nil {
