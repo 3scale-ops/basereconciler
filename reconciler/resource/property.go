@@ -11,123 +11,83 @@ import (
 type PropertyDelta int
 
 const (
-	MissingInBoth                     PropertyDelta = 0
-	MissingFromDesiredPresentInTarget PropertyDelta = 1
-	PresentInDesiredMissingFromTarget PropertyDelta = 2
-	PresentInBoth                     PropertyDelta = 3
+	MissingInBoth                   PropertyDelta = 0
+	MissingFromDesiredPresentInLive PropertyDelta = 1
+	PresentInDesiredMissingFromLive PropertyDelta = 2
+	PresentInBoth                   PropertyDelta = 3
 )
 
 type Property string
 
 func (p Property) JSONPath() string { return string(p) }
 
-func (p Property) Reconcile(live, desired, diff map[string]any, logger logr.Logger) (bool, error) {
+func (p Property) Reconcile(live, desired, diff map[string]any, logger logr.Logger) error {
 	expr, err := jp.ParseString(p.JSONPath())
 	if err != nil {
-		return false, fmt.Errorf("unable to parse JSONPath '%s': %w", p.JSONPath(), err)
+		return fmt.Errorf("unable to parse JSONPath '%s': %w", p.JSONPath(), err)
 	}
 
 	desiredVal := expr.Get(desired)
 	liveVal := expr.Get(live)
 	if len(desiredVal) > 1 || len(liveVal) > 1 {
-		return false, fmt.Errorf("multi-valued JSONPath (%s) not supported when reconciling properties", p.JSONPath())
+		return fmt.Errorf("multi-valued JSONPath (%s) not supported when reconciling properties", p.JSONPath())
 	}
 
 	// store the live value for later comparison
 	if len(liveVal) != 0 {
 		if err := expr.Set(diff, liveVal[0]); err != nil {
-			return false, fmt.Errorf("usable to add value '%v' in JSONPath '%s'", liveVal[0], p.JSONPath())
+			return fmt.Errorf("usable to add value '%v' in JSONPath '%s'", liveVal[0], p.JSONPath())
 		}
 	}
-
-	// if p.checkMetadataEquality(val, desiredVal) {
-	// 	return false, nil
-	// }
-
-	// if p == "metadata.annotations" {
-	// 	spew.Printf("\n#### metadata.annotations: \n")
-	// 	// spew.Printf("\t %+v\n", val)
-	// 	// spew.Printf("\t %+v\n", desiredVal)
-	// 	spew.Dump(val)
-	// 	spew.Dump(desiredVal)
-	// }
 
 	switch delta(len(desiredVal), len(liveVal)) {
 
 	case MissingInBoth:
 		// nothing to do
-		return false, nil
+		return nil
 
-	case MissingFromDesiredPresentInTarget:
+	case MissingFromDesiredPresentInLive:
 		// delete property from target
 		// logger.V(1).Info("differences detected", "op", "delete", "path", p.JSONPath(), "diff", cmp.Diff(liveVal[0], nil))
 		if err := expr.Del(live); err != nil {
-			return false, fmt.Errorf("usable to delete JSONPath '%s'", p.JSONPath())
+			return fmt.Errorf("usable to delete JSONPath '%s'", p.JSONPath())
 		}
-		return true, nil
+		return nil
 
-	case PresentInDesiredMissingFromTarget:
+	case PresentInDesiredMissingFromLive:
 		// add property to target
 		// logger.V(1).Info("differences detected", "op", "add", "path", p.JSONPath(), "diff", cmp.Diff(nil, desiredVal[0]))
 		if err := expr.Set(live, desiredVal[0]); err != nil {
-			return false, fmt.Errorf("usable to add value '%v' in JSONPath '%s'", desiredVal[0], p.JSONPath())
+			return fmt.Errorf("usable to add value '%v' in JSONPath '%s'", desiredVal[0], p.JSONPath())
 		}
-		return true, nil
+		return nil
 
 	case PresentInBoth:
 		// replace property in target if values differ
 		if !equality.Semantic.DeepEqual(desiredVal[0], liveVal[0]) {
 			// logger.V(1).Info("differences detected", "op", "replace", "path", p.JSONPath(), "diff", cmp.Diff(liveVal[0], desiredVal[0]))
 			if err := expr.Set(live, desiredVal[0]); err != nil {
-				return false, fmt.Errorf("usable to replace value '%v' in JSONPath '%s'", desiredVal[0], p.JSONPath())
+				return fmt.Errorf("usable to replace value '%v' in JSONPath '%s'", desiredVal[0], p.JSONPath())
 			}
-			return true, nil
+			return nil
 		}
 
 	}
 
-	return false, nil
+	return nil
 }
 
 func delta(a, b int) PropertyDelta {
 	return PropertyDelta(a<<1 + b)
 }
 
-func (p Property) Ignore(instance, desired, diff map[string]any, logger logr.Logger) error {
+func (p Property) Ignore(m map[string]any) error {
 	expr, err := jp.ParseString(p.JSONPath())
 	if err != nil {
 		return fmt.Errorf("unable to parse JSONPath '%s': %w", p.JSONPath(), err)
 	}
-
-	if err = expr.Del(desired); err != nil {
+	if err = expr.Del(m); err != nil {
 		return fmt.Errorf("unable to parse delete JSONPath '%s' from unstructured desired: %w", p.JSONPath(), err)
 	}
-
-	if err = expr.Del(instance); err != nil {
-		return fmt.Errorf("unable to parse delete JSONPath '%s' from unstructured live: %w", p.JSONPath(), err)
-	}
-
-	if err = expr.Del(diff); err != nil {
-		return fmt.Errorf("unable to parse delete JSONPath '%s' from unstructured diff: %w", p.JSONPath(), err)
-	}
-
 	return nil
 }
-
-// func (p Property) checkMetadataEquality(a, b []any) bool {
-// 	if p == "metadata.annotations" || p == "metadata.labels" {
-// 		return emptyMap(a) && emptyMap(b)
-// 	}
-// 	if p == "metadata.finalizers" {
-// 		return emptyList(a) && emptyList(b)
-// 	}
-// 	return false
-// }
-
-// func emptyMap(a []any) bool {
-// 	return reflect.DeepEqual(a, []any{map[string]any{}}) || reflect.DeepEqual(a, []any{})
-// }
-
-// func emptyList(a []any) bool {
-// 	return reflect.DeepEqual(a, []any{[]any{}}) || reflect.DeepEqual(a, []any{})
-// }

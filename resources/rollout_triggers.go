@@ -62,7 +62,7 @@ func (rt RolloutTrigger) GetAnnotationKey(annotationsDomain string) string {
 }
 
 // reconcileRolloutTriggers modifies the Deployment with the appropriate rollout triggers (annotations)
-func (trigger RolloutTrigger) AddToDeployment(annotationsDomain string) resource.MutationFunction {
+func (trigger RolloutTrigger) AddToDeployment(annotationsDomain string) resource.TemplateMutationFunction {
 	return func(ctx context.Context, cl client.Client, instance client.Object, desired client.Object) error {
 
 		ddep := desired.(*appsv1.Deployment)
@@ -79,7 +79,7 @@ func (trigger RolloutTrigger) AddToDeployment(annotationsDomain string) resource
 }
 
 // reconcileRolloutTriggers modifies the StatefulSet with the appropriate rollout triggers (annotations)
-func (trigger RolloutTrigger) AddToStatefulSet(annotationsDomain string) resource.MutationFunction {
+func (trigger RolloutTrigger) AddToStatefulSet(annotationsDomain string) resource.TemplateMutationFunction {
 	return func(ctx context.Context, cl client.Client, instance client.Object, desired client.Object) error {
 
 		dss := desired.(*appsv1.StatefulSet)

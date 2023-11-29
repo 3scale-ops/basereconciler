@@ -117,26 +117,23 @@ func (r *Reconciler) ManageCleanupLogic(instance client.Object, fns []func(), lo
 // all controllers
 func (r *Reconciler) ReconcileOwnedResources(ctx context.Context, owner client.Object, list []resource.TemplateInterface) error {
 
-	// managedResources := []corev1.ObjectReference{}
+	managedResources := []corev1.ObjectReference{}
 
 	for _, res := range list {
-
-		if err := res.Reconcile(ctx, r.Client, r.Scheme, owner); err != nil {
+		ref, err := resource.CreateOrUpdate(ctx, r.Client, r.Scheme, owner, res)
+		if err != nil {
 			return err
 		}
-
-		// managedResources = append(managedResources, corev1.ObjectReference{
-		// 	Namespace: object.GetNamespace(),
-		// 	Name:      object.GetName(),
-		// 	Kind:      reflect.TypeOf(object).Elem().Name(),
-		// })
+		if ref != nil {
+			managedResources = append(managedResources, *ref)
+		}
 	}
 
-	// if r.IsPrunerEnabled(owner) {
-	// 	if err := r.PruneOrphaned(ctx, owner, managedResources); err != nil {
-	// 		return err
-	// 	}
-	// }
+	if r.IsPrunerEnabled(owner) {
+		if err := r.PruneOrphaned(ctx, owner, managedResources); err != nil {
+			return err
+		}
+	}
 
 	return nil
 }

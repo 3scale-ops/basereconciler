@@ -71,9 +71,9 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 
 	err = r.ReconcileOwnedResources(ctx, instance, []resource.TemplateInterface{
 		resource.Template[*appsv1.Deployment]{
-			Builder:   deployment(req.Namespace),
-			IsEnabled: true,
-			ReconcileProperties: []resource.Property{
+			TemplateBuilder: deployment(req.Namespace),
+			IsEnabled:       true,
+			EnsureProperties: []resource.Property{
 				"metadata.annotations",
 				"metadata.labels",
 				"spec.minReadySeconds",
@@ -93,7 +93,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 				"spec.template.spec.containers[*].terminationMessagePath",
 				"spec.template.spec.containers[*].terminationMessagePolicy",
 			},
-			MutatorFns: []resource.MutationFunction{
+			TemplateMutations: []resource.TemplateMutationFunction{
 				// mutators.ReconcileDeploymentRevisionAnnotation(),
 				mutators.ReconcileDeploymentReplicas(true),
 				mutators.RolloutTrigger{

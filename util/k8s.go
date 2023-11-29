@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"reflect"
 
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
@@ -46,4 +47,15 @@ func NewFromGVK(gvk schema.GroupVersionKind, s *runtime.Scheme) (client.Object, 
 		return nil, fmt.Errorf("runtime object %T does not implement client.Object", o)
 	}
 	return new, nil
+}
+
+func ObjectReference(o client.Object, gvk schema.GroupVersionKind) *corev1.ObjectReference {
+	return &corev1.ObjectReference{
+		Kind:            gvk.Kind,
+		Namespace:       o.GetNamespace(),
+		Name:            o.GetName(),
+		UID:             o.GetUID(),
+		APIVersion:      gvk.Version,
+		ResourceVersion: o.GetResourceVersion(),
+	}
 }

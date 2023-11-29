@@ -6,6 +6,7 @@ import (
 
 	"github.com/3scale-ops/basereconciler/util"
 	"github.com/google/go-cmp/cmp"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/equality"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -16,61 +17,59 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log"
 )
 
-// Reconcile implements a generic reconciler for resources
-func (t Template[T]) Reconcile(ctx context.Context, cl client.Client, s *runtime.Scheme, owner client.Object) error {
+// CreateOrUpdate cretes or updates resources
+func CreateOrUpdate(ctx context.Context, cl client.Client, scheme *runtime.Scheme, owner client.Object, template TemplateInterface) (*corev1.ObjectReference, error) {
 
-	desired, err := t.Build(ctx, cl, nil)
+	desired, err := template.Build(ctx, cl, nil)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	gvk, err := apiutil.GVKForObject(desired, s)
+	gvk, err := apiutil.GVKForObject(desired, scheme)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	logger := log.FromContext(ctx, "gvk", gvk, "resource", desired.GetName())
 
-	instance, err := util.NewFromGVK(gvk, s)
+	instance, err := util.NewFromGVK(gvk, scheme)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	err = cl.Get(ctx, util.ObjectKey(desired), instance)
 	if err != nil {
 		if errors.IsNotFound(err) {
-			if t.Enabled() {
-				if err := controllerutil.SetControllerReference(owner, desired, s); err != nil {
-					return err
+			if template.Enabled() {
+				if err := controllerutil.SetControllerReference(owner, desired, scheme); err != nil {
+					return nil, err
 				}
 				err = cl.Create(ctx, desired)
 				if err != nil {
-					return fmt.Errorf("unable to create object: %w", err)
+					return nil, fmt.Errorf("unable to create object: %w", err)
 				}
 				logger.Info("resource created")
-				return nil
+				return util.ObjectReference(instance, gvk), nil
 
 			} else {
-				return nil
+				return nil, nil
 			}
 		}
-
-		return err
+		return nil, err
 	}
 
 	/* Delete and return if not enabled */
-	if !t.Enabled() {
+	if !template.Enabled() {
 		err := cl.Delete(ctx, instance)
 		if err != nil {
-			return fmt.Errorf("unable to delete object: %w", err)
+			return nil, fmt.Errorf("unable to delete object: %w", err)
 		}
 		logger.Info("resource deleted")
-		return nil
+		return nil, nil
 	}
 
-	needsUpdate := false
-	cfg := t.ReconcilerConfig()
-	diff, err := util.NewFromGVK(gvk, s)
+	cfg := template.ReconcilerConfig()
+	diff, err := util.NewFromGVK(gvk, scheme)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	diff.SetName(desired.GetName())
 	diff.SetNamespace(desired.GetNamespace())
@@ -78,47 +77,47 @@ func (t Template[T]) Reconcile(ctx context.Context, cl client.Client, s *runtime
 	// convert to unstructured
 	udesired, err := runtime.DefaultUnstructuredConverter.ToUnstructured(desired)
 	if err != nil {
-		return fmt.Errorf("unable to convert desired to unstructured: %w", err)
+		return nil, fmt.Errorf("unable to convert desired to unstructured: %w", err)
 	}
 
 	uinstance, err := runtime.DefaultUnstructuredConverter.ToUnstructured(instance)
 	if err != nil {
-		return fmt.Errorf("unable to convert instance to unstructured: %w", err)
+		return nil, fmt.Errorf("unable to convert instance to unstructured: %w", err)
 	}
 
 	udiff, err := runtime.DefaultUnstructuredConverter.ToUnstructured(diff)
 	if err != nil {
-		return fmt.Errorf("unable to convert diff to unstructured: %w", err)
+		return nil, fmt.Errorf("unable to convert diff to unstructured: %w", err)
 	}
 
 	// reconcile properties
 	for _, property := range cfg.ReconcileProperties {
-		changed, err := property.Reconcile(uinstance, udesired, udiff, logger)
-		if err != nil {
-			return err
+		if err := property.Reconcile(uinstance, udesired, udiff, logger); err != nil {
+			return nil, err
 		}
-		needsUpdate = needsUpdate || changed
 	}
 
 	// ignore properties
 	for _, property := range cfg.IgnoreProperties {
-		if err := property.Ignore(uinstance, udesired, udiff, logger); err != nil {
-			return err
+		for _, m := range []map[string]any{uinstance, udesired, udiff} {
+			if err := property.Ignore(m); err != nil {
+				return nil, err
+			}
 		}
 	}
 
 	if err := runtime.DefaultUnstructuredConverter.FromUnstructured(udiff, diff); err != nil {
-		return fmt.Errorf("unable to convert diff from unstructured: %w", err)
+		return nil, fmt.Errorf("unable to convert diff from unstructured: %w", err)
 	}
 
 	if !equality.Semantic.DeepEqual(diff, desired) {
 		logger.Info("resource required update", "diff", cmp.Diff(diff, desired))
 		err := cl.Update(ctx, client.Object(&unstructured.Unstructured{Object: uinstance}))
 		if err != nil {
-			return err
+			return nil, err
 		}
 		logger.Info("Resource updated")
 	}
 
-	return nil
+	return util.ObjectReference(instance, gvk), nil
 }
