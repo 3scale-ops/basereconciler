@@ -119,8 +119,8 @@ func (r *Reconciler) ReconcileOwnedResources(ctx context.Context, owner client.O
 
 	managedResources := []corev1.ObjectReference{}
 
-	for _, res := range list {
-		ref, err := resource.CreateOrUpdate(ctx, r.Client, r.Scheme, owner, res)
+	for _, template := range list {
+		ref, err := resource.CreateOrUpdate(ctx, r.Client, r.Scheme, owner, template)
 		if err != nil {
 			return err
 		}

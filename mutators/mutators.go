@@ -8,17 +8,9 @@ import (
 	"github.com/3scale-ops/basereconciler/util"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/errors"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
-
-func RetrieveLiveObject[T client.Object](ctx context.Context, cl client.Client, o client.Object) (T, error) {
-	desired := o.(T)
-	live := desired.DeepCopyObject().(client.Object)
-	if err := cl.Get(ctx, util.ObjectKey(desired), live); err != nil {
-		return live.(T), fmt.Errorf("unable to retrieve live object: %w", err)
-	}
-	return live.(T), nil
-}
 
 // reconcileDeploymentReplicas reconciles the number of replicas of a Deployment
 func ReconcileDeploymentReplicas(enforce bool) resource.TemplateMutationFunction {
@@ -29,9 +21,12 @@ func ReconcileDeploymentReplicas(enforce bool) resource.TemplateMutationFunction
 			return nil
 		}
 
-		live, err := RetrieveLiveObject[*appsv1.Deployment](ctx, cl, desired)
-		if err != nil {
-			return err
+		live := &appsv1.Deployment{}
+		if err := cl.Get(ctx, util.ObjectKey(desired), live); err != nil {
+			if errors.IsNotFound(err) {
+				return nil
+			}
+			return fmt.Errorf("unable to retrieve live object: %w", err)
 		}
 
 		// override the value in the template with the
@@ -45,9 +40,12 @@ func ReconcileServiceNodePorts() resource.TemplateMutationFunction {
 	return func(ctx context.Context, cl client.Client, desired client.Object) error {
 
 		svc := desired.(*corev1.Service)
-		live, err := RetrieveLiveObject[*corev1.Service](ctx, cl, desired)
-		if err != nil {
-			return err
+		live := &corev1.Service{}
+		if err := cl.Get(ctx, util.ObjectKey(desired), live); err != nil {
+			if errors.IsNotFound(err) {
+				return nil
+			}
+			return fmt.Errorf("unable to retrieve live object: %w", err)
 		}
 
 		// // Set runtime values in the resource:

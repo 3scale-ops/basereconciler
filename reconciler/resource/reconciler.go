@@ -32,11 +32,11 @@ func CreateOrUpdate(ctx context.Context, cl client.Client, scheme *runtime.Schem
 	}
 	logger := log.FromContext(ctx, "gvk", gvk, "resource", desired.GetName())
 
-	instance, err := util.NewFromGVK(gvk, scheme)
+	live, err := util.NewFromGVK(gvk, scheme)
 	if err != nil {
 		return nil, err
 	}
-	err = cl.Get(ctx, util.ObjectKey(desired), instance)
+	err = cl.Get(ctx, util.ObjectKey(desired), live)
 	if err != nil {
 		if errors.IsNotFound(err) {
 			if template.Enabled() {
@@ -48,7 +48,7 @@ func CreateOrUpdate(ctx context.Context, cl client.Client, scheme *runtime.Schem
 					return nil, fmt.Errorf("unable to create object: %w", err)
 				}
 				logger.Info("resource created")
-				return util.ObjectReference(instance, gvk), nil
+				return util.ObjectReference(live, gvk), nil
 
 			} else {
 				return nil, nil
@@ -59,7 +59,7 @@ func CreateOrUpdate(ctx context.Context, cl client.Client, scheme *runtime.Schem
 
 	/* Delete and return if not enabled */
 	if !template.Enabled() {
-		err := cl.Delete(ctx, instance)
+		err := cl.Delete(ctx, live)
 		if err != nil {
 			return nil, fmt.Errorf("unable to delete object: %w", err)
 		}
@@ -68,58 +68,58 @@ func CreateOrUpdate(ctx context.Context, cl client.Client, scheme *runtime.Schem
 	}
 
 	cfg := template.ReconcilerConfig()
-	diff, err := util.NewFromGVK(gvk, scheme)
+	normalizedLive, err := util.NewFromGVK(gvk, scheme)
 	if err != nil {
 		return nil, err
 	}
-	diff.SetName(desired.GetName())
-	diff.SetNamespace(desired.GetNamespace())
+	normalizedLive.SetName(desired.GetName())
+	normalizedLive.SetNamespace(desired.GetNamespace())
 
 	// convert to unstructured
-	udesired, err := runtime.DefaultUnstructuredConverter.ToUnstructured(desired)
+	u_desired, err := runtime.DefaultUnstructuredConverter.ToUnstructured(desired)
 	if err != nil {
 		return nil, fmt.Errorf("unable to convert desired to unstructured: %w", err)
 	}
 
-	uinstance, err := runtime.DefaultUnstructuredConverter.ToUnstructured(instance)
+	u_live, err := runtime.DefaultUnstructuredConverter.ToUnstructured(live)
 	if err != nil {
-		return nil, fmt.Errorf("unable to convert instance to unstructured: %w", err)
+		return nil, fmt.Errorf("unable to convert live to unstructured: %w", err)
 	}
 
-	udiff, err := runtime.DefaultUnstructuredConverter.ToUnstructured(diff)
+	u_normzalizedLive, err := runtime.DefaultUnstructuredConverter.ToUnstructured(normalizedLive)
 	if err != nil {
 		return nil, fmt.Errorf("unable to convert diff to unstructured: %w", err)
 	}
 
 	// reconcile properties
 	for _, property := range cfg.ReconcileProperties {
-		if err := property.Reconcile(uinstance, udesired, udiff, logger); err != nil {
+		if err := property.Reconcile(u_live, u_desired, u_normzalizedLive, logger); err != nil {
 			return nil, err
 		}
 	}
 
 	// ignore properties
 	for _, property := range cfg.IgnoreProperties {
-		for _, m := range []map[string]any{uinstance, udesired, udiff} {
+		for _, m := range []map[string]any{u_live, u_desired, u_normzalizedLive} {
 			if err := property.Ignore(m); err != nil {
 				return nil, err
 			}
 		}
 	}
 
-	if err := runtime.DefaultUnstructuredConverter.FromUnstructured(udiff, diff); err != nil {
+	if err := runtime.DefaultUnstructuredConverter.FromUnstructured(u_normzalizedLive, normalizedLive); err != nil {
 		return nil, fmt.Errorf("unable to convert diff from unstructured: %w", err)
 	}
-	if !equality.Semantic.DeepEqual(diff, desired) {
-		logger.V(1).Info("resource update required", "diff", printfDiff(diff, desired))
-		err := cl.Update(ctx, client.Object(&unstructured.Unstructured{Object: uinstance}))
+	if !equality.Semantic.DeepEqual(normalizedLive, desired) {
+		logger.V(1).Info("resource update required", "diff", printfDiff(normalizedLive, desired))
+		err := cl.Update(ctx, client.Object(&unstructured.Unstructured{Object: u_live}))
 		if err != nil {
 			return nil, err
 		}
 		logger.Info("Resource updated")
 	}
 
-	return util.ObjectReference(instance, gvk), nil
+	return util.ObjectReference(live, gvk), nil
 }
 
 func printfDiff(a, b client.Object) string {

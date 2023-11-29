@@ -102,50 +102,44 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 			},
 		},
 
-		// resource.Template[*corev1.Service]{
-		// 	Builder:   service(req.Namespace, instance.Spec.ServiceAnnotations),
-		// 	IsEnabled: true,
-		// 	ReconcileProperties: []resource.Property{
-		// 		"metadata.annotations",
-		// 		"metadata.labels",
-		// 		"spec.type",
-		// 		"spec.selector",
-		// 		"spec.ports",
-		// 	},
-		// 	IgnoreProperties: []resource.Property{
-		// 		"spec.clusterIP",
-		// 		"spec.clusterIPs",
-		// 		"spec.ipFamilies",
-		// 		"spec.IpFamilyPolicy",
-		// 	},
-		// 	MutatorFns: []resource.MutationFunction{
-		// 		mutators.ReconcileServiceNodePorts(),
-		// 	},
-		// },
+		resource.Template[*corev1.Service]{
+			TemplateBuilder: service(req.Namespace, instance.Spec.ServiceAnnotations),
+			IsEnabled:       true,
+			EnsureProperties: []resource.Property{
+				"metadata.annotations",
+				"metadata.labels",
+				"spec.type",
+				"spec.selector",
+				"spec.ports",
+			},
+			TemplateMutations: []resource.TemplateMutationFunction{
+				mutators.ReconcileServiceNodePorts(),
+			},
+		},
 
-		// resource.Template[*autoscalingv2.HorizontalPodAutoscaler]{
-		// 	Builder:   hpa(req.Namespace),
-		// 	IsEnabled: instance.Spec.HPA != nil && *instance.Spec.HPA,
-		// 	ReconcileProperties: []resource.Property{
-		// 		"metadata.annotations",
-		// 		"metadata.labels",
-		// 		"spec.scaleTargetRef",
-		// 		"spec.minReplicas",
-		// 		"spec.maxReplicas",
-		// 		"spec.metrics",
-		// 	},
-		// },
-		// resource.Template[*policyv1.PodDisruptionBudget]{
-		// 	Builder:   pdb(req.Namespace),
-		// 	IsEnabled: instance.Spec.PDB != nil && *instance.Spec.PDB,
-		// 	ReconcileProperties: []resource.Property{
-		// 		"metadata.annotations",
-		// 		"metadata.labels",
-		// 		"spec.maxUnavailable",
-		// 		"spec.minAvailable",
-		// 		"spec.selector",
-		// 	},
-		// },
+		resource.Template[*autoscalingv2.HorizontalPodAutoscaler]{
+			TemplateBuilder: hpa(req.Namespace),
+			IsEnabled:       instance.Spec.HPA != nil && *instance.Spec.HPA,
+			EnsureProperties: []resource.Property{
+				"metadata.annotations",
+				"metadata.labels",
+				"spec.scaleTargetRef",
+				"spec.minReplicas",
+				"spec.maxReplicas",
+				"spec.metrics",
+			},
+		},
+		resource.Template[*policyv1.PodDisruptionBudget]{
+			TemplateBuilder: pdb(req.Namespace),
+			IsEnabled:       instance.Spec.PDB != nil && *instance.Spec.PDB,
+			EnsureProperties: []resource.Property{
+				"metadata.annotations",
+				"metadata.labels",
+				"spec.maxUnavailable",
+				"spec.minAvailable",
+				"spec.selector",
+			},
+		},
 	})
 
 	if err != nil {
