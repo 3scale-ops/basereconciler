@@ -21,7 +21,7 @@ import (
 
 	"github.com/3scale-ops/basereconciler/mutators"
 	"github.com/3scale-ops/basereconciler/reconciler"
-	"github.com/3scale-ops/basereconciler/reconciler/resource"
+	"github.com/3scale-ops/basereconciler/resource"
 	"github.com/3scale-ops/basereconciler/test/api/v1alpha1"
 	"github.com/3scale-ops/basereconciler/util"
 	"github.com/go-logr/logr"

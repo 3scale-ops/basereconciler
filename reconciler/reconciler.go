@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/3scale-ops/basereconciler/reconciler/resource"
+	"github.com/3scale-ops/basereconciler/resource"
 	"github.com/3scale-ops/basereconciler/util"
 	"github.com/go-logr/logr"
 	corev1 "k8s.io/api/core/v1"
