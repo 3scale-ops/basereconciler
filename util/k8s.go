@@ -3,6 +3,7 @@ package util
 import (
 	"fmt"
 	"reflect"
+	"strings"
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -45,6 +46,21 @@ func NewFromGVK(gvk schema.GroupVersionKind, s *runtime.Scheme) (client.Object, 
 	new, ok := o.(client.Object)
 	if !ok {
 		return nil, fmt.Errorf("runtime object %T does not implement client.Object", o)
+	}
+	return new, nil
+}
+
+func NewObjectListFromGVK(gvk schema.GroupVersionKind, s *runtime.Scheme) (client.ObjectList, error) {
+	if !strings.HasSuffix(gvk.Kind, "List") {
+		gvk.Kind = gvk.Kind + "List"
+	}
+	o, err := s.New(gvk)
+	if err != nil {
+		return nil, err
+	}
+	new, ok := o.(client.ObjectList)
+	if !ok {
+		return nil, fmt.Errorf("runtime object %T does not implement client.ObjectList", o)
 	}
 	return new, nil
 }

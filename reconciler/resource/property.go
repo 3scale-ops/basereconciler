@@ -21,21 +21,21 @@ type Property string
 
 func (p Property) JSONPath() string { return string(p) }
 
-func (p Property) Reconcile(live, desired, diff map[string]any, logger logr.Logger) error {
+func (p Property) Reconcile(u_live, u_desired, u_normalizedLive map[string]any, logger logr.Logger) error {
 	expr, err := jp.ParseString(p.JSONPath())
 	if err != nil {
 		return fmt.Errorf("unable to parse JSONPath '%s': %w", p.JSONPath(), err)
 	}
 
-	desiredVal := expr.Get(desired)
-	liveVal := expr.Get(live)
+	desiredVal := expr.Get(u_desired)
+	liveVal := expr.Get(u_live)
 	if len(desiredVal) > 1 || len(liveVal) > 1 {
 		return fmt.Errorf("multi-valued JSONPath (%s) not supported when reconciling properties", p.JSONPath())
 	}
 
-	// store the live value for later comparison
+	// store the live value for later comparison in u_normalizedLive
 	if len(liveVal) != 0 {
-		if err := expr.Set(diff, liveVal[0]); err != nil {
+		if err := expr.Set(u_normalizedLive, liveVal[0]); err != nil {
 			return fmt.Errorf("usable to add value '%v' in JSONPath '%s'", liveVal[0], p.JSONPath())
 		}
 	}
@@ -47,26 +47,23 @@ func (p Property) Reconcile(live, desired, diff map[string]any, logger logr.Logg
 		return nil
 
 	case MissingFromDesiredPresentInLive:
-		// delete property from target
-		// logger.V(1).Info("differences detected", "op", "delete", "path", p.JSONPath(), "diff", cmp.Diff(liveVal[0], nil))
-		if err := expr.Del(live); err != nil {
+		// delete property from u_live
+		if err := expr.Del(u_live); err != nil {
 			return fmt.Errorf("usable to delete JSONPath '%s'", p.JSONPath())
 		}
 		return nil
 
 	case PresentInDesiredMissingFromLive:
-		// add property to target
-		// logger.V(1).Info("differences detected", "op", "add", "path", p.JSONPath(), "diff", cmp.Diff(nil, desiredVal[0]))
-		if err := expr.Set(live, desiredVal[0]); err != nil {
+		// add property to u_live
+		if err := expr.Set(u_live, desiredVal[0]); err != nil {
 			return fmt.Errorf("usable to add value '%v' in JSONPath '%s'", desiredVal[0], p.JSONPath())
 		}
 		return nil
 
 	case PresentInBoth:
-		// replace property in target if values differ
+		// replace property in u_live if values differ
 		if !equality.Semantic.DeepEqual(desiredVal[0], liveVal[0]) {
-			// logger.V(1).Info("differences detected", "op", "replace", "path", p.JSONPath(), "diff", cmp.Diff(liveVal[0], desiredVal[0]))
-			if err := expr.Set(live, desiredVal[0]); err != nil {
+			if err := expr.Set(u_live, desiredVal[0]); err != nil {
 				return fmt.Errorf("usable to replace value '%v' in JSONPath '%s'", desiredVal[0], p.JSONPath())
 			}
 			return nil
@@ -87,7 +84,7 @@ func (p Property) Ignore(m map[string]any) error {
 		return fmt.Errorf("unable to parse JSONPath '%s': %w", p.JSONPath(), err)
 	}
 	if err = expr.Del(m); err != nil {
-		return fmt.Errorf("unable to parse delete JSONPath '%s' from unstructured desired: %w", p.JSONPath(), err)
+		return fmt.Errorf("unable to parse delete JSONPath '%s' from unstructured: %w", p.JSONPath(), err)
 	}
 	return nil
 }

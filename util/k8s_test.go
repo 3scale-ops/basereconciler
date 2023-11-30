@@ -7,6 +7,9 @@ import (
 	monitoringv1 "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/client-go/kubernetes/scheme"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -53,6 +56,97 @@ func TestGetItems(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			if got := GetItems(tt.args.list); !reflect.DeepEqual(got, tt.want) {
 				t.Errorf("GetItems() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestNewFromGVK(t *testing.T) {
+	type args struct {
+		gvk schema.GroupVersionKind
+		s   *runtime.Scheme
+	}
+	tests := []struct {
+		name    string
+		args    args
+		want    client.Object
+		wantErr bool
+	}{
+		{
+			name: "Returns an object of the given gvk",
+			args: args{
+				gvk: schema.GroupVersionKind{
+					Group:   "",
+					Version: "v1",
+					Kind:    "Service",
+				},
+				s: scheme.Scheme,
+			},
+			want:    &corev1.Service{},
+			wantErr: false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := NewFromGVK(tt.args.gvk, tt.args.s)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("NewFromGVK() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("NewFromGVK() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestNewObjectListFromGVK(t *testing.T) {
+	type args struct {
+		gvk schema.GroupVersionKind
+		s   *runtime.Scheme
+	}
+	tests := []struct {
+		name    string
+		args    args
+		want    client.ObjectList
+		wantErr bool
+	}{
+		{
+			name: "Returns a list when given an Object gvk",
+			args: args{
+				gvk: schema.GroupVersionKind{
+					Group:   "",
+					Version: "v1",
+					Kind:    "Service",
+				},
+				s: scheme.Scheme,
+			},
+			want:    &corev1.ServiceList{},
+			wantErr: false,
+		},
+		{
+			name: "Returns a list when given an ObjectList gvk",
+			args: args{
+				gvk: schema.GroupVersionKind{
+					Group:   "",
+					Version: "v1",
+					Kind:    "ServiceList",
+				},
+				s: scheme.Scheme,
+			},
+			want:    &corev1.ServiceList{},
+			wantErr: false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := NewObjectListFromGVK(tt.args.gvk, tt.args.s)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("NewFromGVK() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("NewFromGVK() = %v, want %v", got, tt.want)
 			}
 		})
 	}

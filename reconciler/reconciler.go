@@ -2,9 +2,6 @@ package reconciler
 
 import (
 	"context"
-	"fmt"
-	"reflect"
-	"strconv"
 
 	"github.com/3scale-ops/basereconciler/reconciler/resource"
 	"github.com/3scale-ops/basereconciler/util"
@@ -12,6 +9,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -25,7 +23,8 @@ import (
 // Reconciler computes a list of resources that it needs to keep in place
 type Reconciler struct {
 	client.Client
-	Scheme *runtime.Scheme
+	Scheme      *runtime.Scheme
+	typeTracker typeTracker
 }
 
 func NewFromManager(mgr manager.Manager) Reconciler {
@@ -123,78 +122,17 @@ func (r *Reconciler) ReconcileOwnedResources(ctx context.Context, owner client.O
 		}
 		if ref != nil {
 			managedResources = append(managedResources, *ref)
+			r.typeTracker.trackType(schema.FromAPIVersionAndKind(ref.APIVersion, ref.Kind))
 		}
 	}
 
 	if isPrunerEnabled(owner) {
-		if err := r.PruneOrphaned(ctx, owner, managedResources); err != nil {
+		if err := r.pruneOrphaned(ctx, owner, managedResources); err != nil {
 			return err
 		}
 	}
 
 	return nil
-}
-
-func isPrunerEnabled(owner client.Object) bool {
-	// prune is active by default
-	prune := true
-
-	// get the per resource switch (annotation)
-	if value, ok := owner.GetAnnotations()[fmt.Sprintf("%s/prune", Config.AnnotationsDomain)]; ok {
-		var err error
-		prune, err = strconv.ParseBool(value)
-		if err != nil {
-			prune = true
-		}
-	}
-
-	return prune && Config.ResourcePruner
-}
-
-func (r *Reconciler) PruneOrphaned(ctx context.Context, owner client.Object, managed []corev1.ObjectReference) error {
-	logger := log.FromContext(ctx)
-
-	for _, lType := range Config.ManagedTypes {
-
-		err := r.Client.List(ctx, lType, client.InNamespace(owner.GetNamespace()))
-		if err != nil {
-			return err
-		}
-
-		for _, obj := range util.GetItems(lType) {
-
-			kind := reflect.TypeOf(obj).Elem().Name()
-			if isOwned(owner, obj) && !util.IsBeingDeleted(obj) && !isManaged(util.ObjectKey(obj), kind, managed) {
-
-				err := r.Client.Delete(ctx, obj)
-				if err != nil {
-					return err
-				}
-				logger.Info("resource deleted", "kind", reflect.TypeOf(obj).Elem().Name(), "resource", obj.GetName())
-			}
-		}
-	}
-	return nil
-}
-
-func isOwned(owner client.Object, owned client.Object) bool {
-	refs := owned.GetOwnerReferences()
-	for _, ref := range refs {
-		if ref.Kind == owner.GetObjectKind().GroupVersionKind().Kind && ref.Name == owner.GetName() {
-			return true
-		}
-	}
-	return false
-}
-
-func isManaged(key types.NamespacedName, kind string, managed []corev1.ObjectReference) bool {
-
-	for _, m := range managed {
-		if m.Name == key.Name && m.Namespace == key.Namespace && m.Kind == kind {
-			return true
-		}
-	}
-	return false
 }
 
 // SecretEventHandler returns an EventHandler for the specific client.ObjectList

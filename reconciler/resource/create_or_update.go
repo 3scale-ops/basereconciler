@@ -68,6 +68,10 @@ func CreateOrUpdate(ctx context.Context, cl client.Client, scheme *runtime.Schem
 	}
 
 	cfg := template.ReconcilerConfig()
+
+	// normalizedLive is a struct that will be populated with only the reconciled
+	// properties and their respective live values. It will be used to compare it with
+	// the desire and determine in an update is required.
 	normalizedLive, err := util.NewFromGVK(gvk, scheme)
 	if err != nil {
 		return nil, err
@@ -88,7 +92,7 @@ func CreateOrUpdate(ctx context.Context, cl client.Client, scheme *runtime.Schem
 
 	u_normzalizedLive, err := runtime.DefaultUnstructuredConverter.ToUnstructured(normalizedLive)
 	if err != nil {
-		return nil, fmt.Errorf("unable to convert diff to unstructured: %w", err)
+		return nil, fmt.Errorf("unable to convert normalizedLive to unstructured: %w", err)
 	}
 
 	// reconcile properties
@@ -107,6 +111,7 @@ func CreateOrUpdate(ctx context.Context, cl client.Client, scheme *runtime.Schem
 		}
 	}
 
+	// do the comparison using structs so "equality.Semantic" can be used
 	if err := runtime.DefaultUnstructuredConverter.FromUnstructured(u_normzalizedLive, normalizedLive); err != nil {
 		return nil, fmt.Errorf("unable to convert diff from unstructured: %w", err)
 	}

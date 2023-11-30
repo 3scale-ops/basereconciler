@@ -14,6 +14,7 @@ require (
 	github.com/onsi/ginkgo/v2 v2.9.1
 	github.com/onsi/gomega v1.27.3
 	github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring v0.42.1
+	github.com/samber/lo v1.38.1
 	k8s.io/api v0.26.2
 	k8s.io/apimachinery v0.26.5
 	k8s.io/client-go v0.26.2
@@ -61,6 +62,7 @@ require (
 	go.uber.org/atomic v1.10.0 // indirect
 	go.uber.org/multierr v1.10.0 // indirect
 	go.uber.org/zap v1.24.0 // indirect
+	golang.org/x/exp v0.0.0-20230310171629-522b1b587ee0 // indirect
 	golang.org/x/net v0.17.0 // indirect
 	golang.org/x/oauth2 v0.8.0 // indirect
 	golang.org/x/sys v0.13.0 // indirect
