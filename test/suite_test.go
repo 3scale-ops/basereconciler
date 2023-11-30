@@ -40,9 +40,6 @@ import (
 
 	// +kubebuilder:scaffold:imports
 	"github.com/3scale-ops/basereconciler/test/api/v1alpha1"
-	externalsecretsv1beta1 "github.com/external-secrets/external-secrets/apis/externalsecrets/v1beta1"
-	grafanav1alpha1 "github.com/grafana-operator/grafana-operator/v4/api/integreatly/v1alpha1"
-	monitoringv1 "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
 )
 
 // These tests use Ginkgo (BDD-style Go testing framework). Refer to
@@ -71,7 +68,6 @@ var _ = BeforeSuite(func() {
 	testEnv = &envtest.Environment{
 		CRDDirectoryPaths: []string{
 			filepath.Join("api", "v1alpha1"),
-			filepath.Join("external-apis"),
 		},
 		UseExistingCluster: util.Pointer(true),
 	}
@@ -85,9 +81,6 @@ var _ = BeforeSuite(func() {
 	Expect(cfg).NotTo(BeNil())
 
 	utilruntime.Must(v1alpha1.AddToScheme(scheme.Scheme))
-	utilruntime.Must(externalsecretsv1beta1.AddToScheme(scheme.Scheme))
-	utilruntime.Must(grafanav1alpha1.AddToScheme(scheme.Scheme))
-	utilruntime.Must(monitoringv1.AddToScheme(scheme.Scheme))
 
 	mgr, err := ctrl.NewManager(cfg, ctrl.Options{
 		Scheme: scheme.Scheme,

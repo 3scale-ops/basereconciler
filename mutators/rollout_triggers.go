@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/3scale-ops/basereconciler/reconciler"
 	"github.com/3scale-ops/basereconciler/reconciler/resource"
 	"github.com/3scale-ops/basereconciler/util"
 	appsv1 "k8s.io/api/apps/v1"
@@ -62,7 +63,13 @@ func (rt RolloutTrigger) GetAnnotationKey(annotationsDomain string) string {
 }
 
 // reconcileRolloutTriggers modifies the Deployment with the appropriate rollout triggers (annotations)
-func (trigger RolloutTrigger) AddToDeployment(annotationsDomain string) resource.TemplateMutationFunction {
+func (trigger RolloutTrigger) AddToDeployment(params ...string) resource.TemplateMutationFunction {
+	var domain string
+	if len(params) == 0 {
+		domain = reconciler.Config.AnnotationsDomain
+	} else {
+		domain = params[0]
+	}
 	return func(ctx context.Context, cl client.Client, desired client.Object) error {
 
 		ddep := desired.(*appsv1.Deployment)
@@ -73,13 +80,19 @@ func (trigger RolloutTrigger) AddToDeployment(annotationsDomain string) resource
 		if err != nil {
 			return err
 		}
-		ddep.Spec.Template.ObjectMeta.Annotations[trigger.GetAnnotationKey(annotationsDomain)] = hash
+		ddep.Spec.Template.ObjectMeta.Annotations[trigger.GetAnnotationKey(domain)] = hash
 		return nil
 	}
 }
 
 // reconcileRolloutTriggers modifies the StatefulSet with the appropriate rollout triggers (annotations)
-func (trigger RolloutTrigger) AddToStatefulSet(annotationsDomain string) resource.TemplateMutationFunction {
+func (trigger RolloutTrigger) AddToStatefulSet(params ...string) resource.TemplateMutationFunction {
+	var domain string
+	if len(params) == 0 {
+		domain = reconciler.Config.AnnotationsDomain
+	} else {
+		domain = params[0]
+	}
 	return func(ctx context.Context, cl client.Client, desired client.Object) error {
 
 		dss := desired.(*appsv1.StatefulSet)
@@ -90,7 +103,7 @@ func (trigger RolloutTrigger) AddToStatefulSet(annotationsDomain string) resourc
 		if err != nil {
 			return err
 		}
-		dss.Spec.Template.ObjectMeta.Annotations[trigger.GetAnnotationKey(annotationsDomain)] = hash
+		dss.Spec.Template.ObjectMeta.Annotations[trigger.GetAnnotationKey(domain)] = hash
 		return nil
 	}
 }

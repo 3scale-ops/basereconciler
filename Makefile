@@ -42,10 +42,10 @@ vet: ## Run go vet against code.
 
 ##@ Test
 KUBEBUILDER_ASSETS = "$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) -p path)"
-TEST_PKG = ./test/...
+TEST_PKG = ./...
 
 test: manifests generate fmt vet envtest ginkgo ## Run tests.
-	KUBEBUILDER_ASSETS=$(KUBEBUILDER_ASSETS) $(GINKGO) -v -r $(TEST_PKG)
+	KUBEBUILDER_ASSETS=$(KUBEBUILDER_ASSETS) $(GINKGO) -p -v -r $(TEST_PKG)
 
 manifests: controller-gen ## Generate WebhookConfiguration, ClusterRole and CustomResourceDefinition objects.
 	$(CONTROLLER_GEN) crd paths="./test/..." output:crd:artifacts:config="./test/api/v1alpha1"

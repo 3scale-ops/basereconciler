@@ -61,7 +61,7 @@ func TestGetItems(t *testing.T) {
 	}
 }
 
-func TestNewFromGVK(t *testing.T) {
+func TestNewObjectFromGVK(t *testing.T) {
 	type args struct {
 		gvk schema.GroupVersionKind
 		s   *runtime.Scheme
@@ -88,13 +88,13 @@ func TestNewFromGVK(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := NewFromGVK(tt.args.gvk, tt.args.s)
+			got, err := NewObjectFromGVK(tt.args.gvk, tt.args.s)
 			if (err != nil) != tt.wantErr {
-				t.Errorf("NewFromGVK() error = %v, wantErr %v", err, tt.wantErr)
+				t.Errorf("NewObjectFromGVK() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
 			if !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("NewFromGVK() = %v, want %v", got, tt.want)
+				t.Errorf("NewObjectFromGVK() = %v, want %v", got, tt.want)
 			}
 		})
 	}

@@ -21,9 +21,9 @@ import (
 
 func TestReconciler_pruneOrphaned(t *testing.T) {
 	type fields struct {
-		Client      client.Client
-		Scheme      *runtime.Scheme
-		typeTracker typeTracker
+		Client    client.Client
+		Scheme    *runtime.Scheme
+		seenTypes []schema.GroupVersionKind
 	}
 	type args struct {
 		ctx     context.Context
@@ -56,10 +56,10 @@ func TestReconciler_pruneOrphaned(t *testing.T) {
 						OwnerReferences: []metav1.OwnerReference{{APIVersion: "v1", Kind: "ServiceAccount", Name: "owner"}}}},
 				).Build(),
 				Scheme: scheme.Scheme,
-				typeTracker: typeTracker{seenTypes: []schema.GroupVersionKind{
+				seenTypes: []schema.GroupVersionKind{
 					schema.FromAPIVersionAndKind("autoscaling/v2", "HorizontalPodAutoscaler"),
 					schema.FromAPIVersionAndKind("policy/v1", "PodDisruptionBudget"),
-				}},
+				},
 			},
 			args: args{
 				ctx: context.TODO(),
@@ -95,9 +95,9 @@ func TestReconciler_pruneOrphaned(t *testing.T) {
 						OwnerReferences: []metav1.OwnerReference{{APIVersion: "v1", Kind: "ServiceAccount", Name: "owner"}}}},
 				).Build(),
 				Scheme: scheme.Scheme,
-				typeTracker: typeTracker{seenTypes: []schema.GroupVersionKind{
+				seenTypes: []schema.GroupVersionKind{
 					schema.FromAPIVersionAndKind("v1", "Secret"),
-				}},
+				},
 			},
 			args: args{
 				ctx: context.TODO(),
@@ -136,12 +136,12 @@ func TestReconciler_pruneOrphaned(t *testing.T) {
 						OwnerReferences: []metav1.OwnerReference{{APIVersion: "v1", Kind: "ServiceAccount", Name: "owner"}}}},
 				).Build(),
 				Scheme: scheme.Scheme,
-				typeTracker: typeTracker{seenTypes: []schema.GroupVersionKind{
+				seenTypes: []schema.GroupVersionKind{
 					schema.FromAPIVersionAndKind("v1", "ServiceAccount"),
 					schema.FromAPIVersionAndKind("apps/v1", "Deployment"),
 					schema.FromAPIVersionAndKind("autoscaling/v2", "HorizontalPodAutoscaler"),
 					schema.FromAPIVersionAndKind("policy/v1", "PodDisruptionBudget"),
-				}},
+				},
 			},
 			args: args{
 				ctx: context.TODO(),
@@ -169,7 +169,7 @@ func TestReconciler_pruneOrphaned(t *testing.T) {
 			r := &Reconciler{
 				Client:      tt.fields.Client,
 				Scheme:      tt.fields.Scheme,
-				typeTracker: tt.fields.typeTracker,
+				typeTracker: typeTracker{seenTypes: tt.fields.seenTypes},
 			}
 			if err := r.pruneOrphaned(tt.args.ctx, tt.args.owner, tt.args.managed); (err != nil) != tt.wantErr {
 				t.Errorf("Reconciler.pruneOrphaned() error = %v, wantErr %v", err, tt.wantErr)
@@ -184,82 +184,6 @@ func TestReconciler_pruneOrphaned(t *testing.T) {
 		})
 	}
 }
-
-// func Test_isManaged(t *testing.T) {
-// 	type args struct {
-// 		key     types.NamespacedName
-// 		kind    string
-// 		managed []corev1.ObjectReference
-// 	}
-// 	tests := []struct {
-// 		name string
-// 		args args
-// 		want bool
-// 	}{
-// 		{
-// 			name: "Returns true",
-// 			args: args{
-// 				key:  types.NamespacedName{Name: "system-recaptcha", Namespace: "ns"},
-// 				kind: "Secret",
-// 				managed: []corev1.ObjectReference{
-// 					{Namespace: "ns", Name: "system-recaptcha", Kind: "Secret"},
-// 					{Namespace: "ns", Name: "system-smtp", Kind: "Secret"},
-// 					{Namespace: "ns", Name: "system-zync", Kind: "Secret"},
-// 					{Namespace: "ns", Name: "system", Kind: "Secret"},
-// 					{Namespace: "ns", Name: "system-app", Kind: "Deployment"},
-// 					{Namespace: "ns", Name: "system-app", Kind: "ServiceAccount"},
-// 					{Namespace: "ns", Name: "system-app", Kind: "HorizontalPodAutoscaler"},
-// 					{Namespace: "ns", Name: "system-app", Kind: "PodDisruptionBudget"},
-// 					{Namespace: "ns", Name: "system-app", Kind: "PodMonitor"},
-// 				},
-// 			},
-// 			want: true,
-// 		},
-// 		{
-// 			name: "Returns false",
-// 			args: args{
-// 				key:  types.NamespacedName{Name: "system-recaptcha", Namespace: "ns"},
-// 				kind: "Secret",
-// 				managed: []corev1.ObjectReference{
-// 					{Namespace: "ns", Name: "system-smtp", Kind: "Secret"},
-// 					{Namespace: "ns", Name: "system-zync", Kind: "Secret"},
-// 					{Namespace: "ns", Name: "system", Kind: "Secret"},
-// 					{Namespace: "ns", Name: "system-app", Kind: "Deployment"},
-// 					{Namespace: "ns", Name: "system-app", Kind: "ServiceAccount"},
-// 					{Namespace: "ns", Name: "system-app", Kind: "HorizontalPodAutoscaler"},
-// 					{Namespace: "ns", Name: "system-app", Kind: "PodDisruptionBudget"},
-// 					{Namespace: "ns", Name: "system-app", Kind: "PodMonitor"},
-// 				},
-// 			},
-// 			want: false,
-// 		},
-// 		{
-// 			name: "Returns false",
-// 			args: args{
-// 				key:  types.NamespacedName{Name: "system-app", Namespace: "ns"},
-// 				kind: "Role",
-// 				managed: []corev1.ObjectReference{
-// 					{Namespace: "ns", Name: "system-smtp", Kind: "Secret"},
-// 					{Namespace: "ns", Name: "system-zync", Kind: "Secret"},
-// 					{Namespace: "ns", Name: "system", Kind: "Secret"},
-// 					{Namespace: "ns", Name: "system-app", Kind: "Deployment"},
-// 					{Namespace: "ns", Name: "system-app", Kind: "ServiceAccount"},
-// 					{Namespace: "ns", Name: "system-app", Kind: "HorizontalPodAutoscaler"},
-// 					{Namespace: "ns", Name: "system-app", Kind: "PodDisruptionBudget"},
-// 					{Namespace: "ns", Name: "system-app", Kind: "PodMonitor"},
-// 				},
-// 			},
-// 			want: false,
-// 		},
-// 	}
-// 	for _, tt := range tests {
-// 		t.Run(tt.name, func(t *testing.T) {
-// 			if got := isManaged(tt.args.key, tt.args.kind, tt.args.managed); got != tt.want {
-// 				t.Errorf("isManaged() = %v, want %v", got, tt.want)
-// 			}
-// 		})
-// 	}
-// }
 
 func Test_isPrunerEnabled(t *testing.T) {
 	type args struct {

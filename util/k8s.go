@@ -38,7 +38,7 @@ func IsBeingDeleted(o client.Object) bool {
 	return !o.GetDeletionTimestamp().IsZero()
 }
 
-func NewFromGVK(gvk schema.GroupVersionKind, s *runtime.Scheme) (client.Object, error) {
+func NewObjectFromGVK(gvk schema.GroupVersionKind, s *runtime.Scheme) (client.Object, error) {
 	o, err := s.New(gvk)
 	if err != nil {
 		return nil, err
@@ -71,7 +71,7 @@ func ObjectReference(o client.Object, gvk schema.GroupVersionKind) *corev1.Objec
 		Namespace:       o.GetNamespace(),
 		Name:            o.GetName(),
 		UID:             o.GetUID(),
-		APIVersion:      gvk.Version,
+		APIVersion:      gvk.GroupVersion().String(),
 		ResourceVersion: o.GetResourceVersion(),
 	}
 }

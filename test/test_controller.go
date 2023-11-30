@@ -69,7 +69,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 		return *result, err
 	}
 
-	err = r.ReconcileOwnedResources(ctx, instance, []resource.TemplateInterface{
+	resources := []resource.TemplateInterface{
 		resource.Template[*appsv1.Deployment]{
 			TemplateBuilder: deployment(req.Namespace),
 			IsEnabled:       true,
@@ -102,23 +102,6 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 			},
 		},
 
-		resource.Template[*corev1.Service]{
-			TemplateBuilder: service(req.Namespace, instance.Spec.ServiceAnnotations),
-			IsEnabled:       true,
-			EnsureProperties: []resource.Property{
-				"metadata.annotations",
-				"metadata.labels",
-				"spec.type",
-				"spec.selector",
-				"spec.ports",
-				"spec.clusterIP",
-				// "/spec/clusterIP", "/spec/clusterIPs", "/spec/ipFamilies", "/spec/ipFamilyPolicy", "/spec/ports/*/nodePort"
-			},
-			TemplateMutations: []resource.TemplateMutationFunction{
-				mutators.ReconcileServiceNodePorts(),
-			},
-		},
-
 		resource.Template[*autoscalingv2.HorizontalPodAutoscaler]{
 			TemplateBuilder: hpa(req.Namespace),
 			IsEnabled:       instance.Spec.HPA != nil && *instance.Spec.HPA,
@@ -142,8 +125,27 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 				"spec.selector",
 			},
 		},
-	})
+	}
 
+	if instance.Spec.PruneService == nil || !*instance.Spec.PruneService {
+		resources = append(resources, resource.Template[*corev1.Service]{
+			TemplateBuilder: service(req.Namespace, instance.Spec.ServiceAnnotations),
+			IsEnabled:       true,
+			EnsureProperties: []resource.Property{
+				"metadata.annotations",
+				"metadata.labels",
+				"spec.type",
+				"spec.selector",
+				"spec.ports",
+				"spec.clusterIP",
+			},
+			TemplateMutations: []resource.TemplateMutationFunction{
+				mutators.ReconcileServiceNodePorts(),
+			},
+		})
+	}
+
+	err = r.ReconcileOwnedResources(ctx, instance, resources)
 	if err != nil {
 		logger.Error(err, "unable to reconcile owned resources")
 		return ctrl.Result{}, err

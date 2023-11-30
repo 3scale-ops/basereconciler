@@ -163,10 +163,10 @@ func TestRolloutTrigger_AddToDeployment(t *testing.T) {
 		SecretName    *string
 	}
 	type args struct {
-		annotationsDomain string
-		ctx               context.Context
-		cl                client.Client
-		desired           client.Object
+		domain  string
+		ctx     context.Context
+		cl      client.Client
+		desired client.Object
 	}
 	tests := []struct {
 		name    string
@@ -182,8 +182,8 @@ func TestRolloutTrigger_AddToDeployment(t *testing.T) {
 				ConfigMapName: util.Pointer("cm"),
 			},
 			args: args{
-				annotationsDomain: "example.com",
-				ctx:               context.TODO(),
+				domain: "example.com",
+				ctx:    context.TODO(),
 				cl: fake.NewClientBuilder().WithObjects(
 					&corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Name: "cm", Namespace: "ns"},
 						Data: map[string]string{"key": "data"}},
@@ -207,7 +207,7 @@ func TestRolloutTrigger_AddToDeployment(t *testing.T) {
 				ConfigMapName: tt.fields.ConfigMapName,
 				SecretName:    tt.fields.SecretName,
 			}
-			err := trigger.AddToDeployment(tt.args.annotationsDomain)(tt.args.ctx, tt.args.cl, tt.args.desired)
+			err := trigger.AddToDeployment(tt.args.domain)(tt.args.ctx, tt.args.cl, tt.args.desired)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("RolloutTrigger.AddToDeployment() error = %v, wantErr %v", err, tt.wantErr)
 			}
@@ -225,10 +225,10 @@ func TestRolloutTrigger_AddToStatefulSet(t *testing.T) {
 		SecretName    *string
 	}
 	type args struct {
-		annotationsDomain string
-		ctx               context.Context
-		cl                client.Client
-		desired           client.Object
+		domain  string
+		ctx     context.Context
+		cl      client.Client
+		desired client.Object
 	}
 	tests := []struct {
 		name    string
@@ -244,8 +244,8 @@ func TestRolloutTrigger_AddToStatefulSet(t *testing.T) {
 				ConfigMapName: util.Pointer("cm"),
 			},
 			args: args{
-				annotationsDomain: "example.com",
-				ctx:               context.TODO(),
+				domain: "example.com",
+				ctx:    context.TODO(),
 				cl: fake.NewClientBuilder().WithObjects(
 					&corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Name: "cm", Namespace: "ns"},
 						Data: map[string]string{"key": "data"}},
@@ -269,7 +269,7 @@ func TestRolloutTrigger_AddToStatefulSet(t *testing.T) {
 				ConfigMapName: tt.fields.ConfigMapName,
 				SecretName:    tt.fields.SecretName,
 			}
-			err := trigger.AddToStatefulSet(tt.args.annotationsDomain)(tt.args.ctx, tt.args.cl, tt.args.desired)
+			err := trigger.AddToStatefulSet(tt.args.domain)(tt.args.ctx, tt.args.cl, tt.args.desired)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("RolloutTrigger.AddToStatefulSet() error = %v, wantErr %v", err, tt.wantErr)
 			}

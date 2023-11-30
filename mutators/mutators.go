@@ -48,12 +48,10 @@ func ReconcileServiceNodePorts() resource.TemplateMutationFunction {
 			return fmt.Errorf("unable to retrieve live object: %w", err)
 		}
 
-		// // Set runtime values in the resource:
-		// "/spec/clusterIP", "/spec/clusterIPs", "/spec/ipFamilies", "/spec/ipFamilyPolicy", "/spec/ports/*/nodePort"
+		// Set runtime values in the resource:
+		// "/spec/clusterIP", "/spec/clusterIPs", "/spec/ports/*/nodePort"
 		svc.Spec.ClusterIP = live.Spec.ClusterIP
-		// svc.Spec.ClusterIPs = live.Spec.ClusterIPs
-		// svc.Spec.IPFamilies = live.Spec.IPFamilies
-		// svc.Spec.IPFamilyPolicy = live.Spec.IPFamilyPolicy
+		svc.Spec.ClusterIPs = live.Spec.ClusterIPs
 
 		// For services that are not ClusterIP we need to populate the runtime values
 		// of NodePort for each port

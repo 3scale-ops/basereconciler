@@ -2,6 +2,7 @@ package reconciler
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/3scale-ops/basereconciler/reconciler/resource"
 	"github.com/3scale-ops/basereconciler/util"
@@ -100,12 +101,10 @@ func (r *Reconciler) IsInitialized(instance client.Object, finalizer *string) bo
 // ManageCleanupLogic contains finalization logic for the LockedResourcesReconciler
 // Functionality can be extended by passing extra cleanup functions
 func (r *Reconciler) ManageCleanupLogic(instance client.Object, fns []func(), log logr.Logger) error {
-
 	// Call any cleanup functions passed
 	for _, fn := range fns {
 		fn()
 	}
-
 	return nil
 }
 
@@ -118,7 +117,7 @@ func (r *Reconciler) ReconcileOwnedResources(ctx context.Context, owner client.O
 	for _, template := range list {
 		ref, err := resource.CreateOrUpdate(ctx, r.Client, r.Scheme, owner, template)
 		if err != nil {
-			return err
+			return fmt.Errorf("unable to CreateOrUpdate resource: %w", err)
 		}
 		if ref != nil {
 			managedResources = append(managedResources, *ref)
@@ -128,7 +127,7 @@ func (r *Reconciler) ReconcileOwnedResources(ctx context.Context, owner client.O
 
 	if isPrunerEnabled(owner) {
 		if err := r.pruneOrphaned(ctx, owner, managedResources); err != nil {
-			return err
+			return fmt.Errorf("unable to prune orphaned resources: %w", err)
 		}
 	}
 

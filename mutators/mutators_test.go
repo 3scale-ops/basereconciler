@@ -123,11 +123,9 @@ func Test_ReconcileServiceNodePorts(t *testing.T) {
 							Name: "service", Namespace: "ns",
 						},
 						Spec: corev1.ServiceSpec{
-							Type:           corev1.ServiceTypeLoadBalancer,
-							IPFamilies:     []corev1.IPFamily{corev1.IPv4Protocol},
-							IPFamilyPolicy: util.Pointer(corev1.IPFamilyPolicySingleStack),
-							ClusterIP:      "1.1.1.1",
-							ClusterIPs:     []string{"1.1.1.1"},
+							Type:       corev1.ServiceTypeLoadBalancer,
+							ClusterIP:  "1.1.1.1",
+							ClusterIPs: []string{"1.1.1.1"},
 							Ports: []corev1.ServicePort{{
 								Name: "port", Port: 80, TargetPort: intstr.FromInt(80), Protocol: corev1.ProtocolTCP, NodePort: 3333}},
 						},
@@ -147,11 +145,6 @@ func Test_ReconcileServiceNodePorts(t *testing.T) {
 				},
 				Spec: corev1.ServiceSpec{
 					Type:       corev1.ServiceTypeLoadBalancer,
-					IPFamilies: []corev1.IPFamily{corev1.IPv4Protocol},
-					IPFamilyPolicy: func() *corev1.IPFamilyPolicyType {
-						f := corev1.IPFamilyPolicySingleStack
-						return &f
-					}(),
 					ClusterIP:  "1.1.1.1",
 					ClusterIPs: []string{"1.1.1.1"},
 					Ports: []corev1.ServicePort{{
@@ -170,11 +163,9 @@ func Test_ReconcileServiceNodePorts(t *testing.T) {
 							Name: "service", Namespace: "ns",
 						},
 						Spec: corev1.ServiceSpec{
-							Type:           corev1.ServiceTypeLoadBalancer,
-							IPFamilies:     []corev1.IPFamily{corev1.IPv4Protocol},
-							IPFamilyPolicy: util.Pointer(corev1.IPFamilyPolicySingleStack),
-							ClusterIP:      "1.1.1.1",
-							ClusterIPs:     []string{"1.1.1.1"},
+							Type:       corev1.ServiceTypeLoadBalancer,
+							ClusterIP:  "1.1.1.1",
+							ClusterIPs: []string{"1.1.1.1"},
 							Ports: []corev1.ServicePort{{
 								Name: "port", Port: 80, TargetPort: intstr.FromInt(80), Protocol: corev1.ProtocolTCP, NodePort: 3333}},
 						},
@@ -195,11 +186,6 @@ func Test_ReconcileServiceNodePorts(t *testing.T) {
 				},
 				Spec: corev1.ServiceSpec{
 					Type:       corev1.ServiceTypeLoadBalancer,
-					IPFamilies: []corev1.IPFamily{corev1.IPv4Protocol},
-					IPFamilyPolicy: func() *corev1.IPFamilyPolicyType {
-						f := corev1.IPFamilyPolicySingleStack
-						return &f
-					}(),
 					ClusterIP:  "1.1.1.1",
 					ClusterIPs: []string{"1.1.1.1"},
 					Ports: []corev1.ServicePort{
@@ -220,11 +206,9 @@ func Test_ReconcileServiceNodePorts(t *testing.T) {
 							Name: "service", Namespace: "ns",
 						},
 						Spec: corev1.ServiceSpec{
-							Type:           corev1.ServiceTypeLoadBalancer,
-							IPFamilies:     []corev1.IPFamily{corev1.IPv4Protocol},
-							IPFamilyPolicy: util.Pointer(corev1.IPFamilyPolicySingleStack),
-							ClusterIP:      "1.1.1.1",
-							ClusterIPs:     []string{"1.1.1.1"},
+							Type:       corev1.ServiceTypeLoadBalancer,
+							ClusterIP:  "1.1.1.1",
+							ClusterIPs: []string{"1.1.1.1"},
 							Ports: []corev1.ServicePort{
 								{Name: "port", Port: 80, TargetPort: intstr.FromInt(80), Protocol: corev1.ProtocolTCP, NodePort: 3333},
 								{Name: "port", Port: 8080, TargetPort: intstr.FromInt(8080), Protocol: corev1.ProtocolTCP, NodePort: 3334},
@@ -246,11 +230,6 @@ func Test_ReconcileServiceNodePorts(t *testing.T) {
 				},
 				Spec: corev1.ServiceSpec{
 					Type:       corev1.ServiceTypeLoadBalancer,
-					IPFamilies: []corev1.IPFamily{corev1.IPv4Protocol},
-					IPFamilyPolicy: func() *corev1.IPFamilyPolicyType {
-						f := corev1.IPFamilyPolicySingleStack
-						return &f
-					}(),
 					ClusterIP:  "1.1.1.1",
 					ClusterIPs: []string{"1.1.1.1"},
 					Ports: []corev1.ServicePort{
@@ -270,11 +249,9 @@ func Test_ReconcileServiceNodePorts(t *testing.T) {
 							Name: "service", Namespace: "ns",
 						},
 						Spec: corev1.ServiceSpec{
-							Type:           corev1.ServiceTypeClusterIP,
-							IPFamilies:     []corev1.IPFamily{corev1.IPv4Protocol},
-							IPFamilyPolicy: util.Pointer(corev1.IPFamilyPolicySingleStack),
-							ClusterIP:      "1.1.1.1",
-							ClusterIPs:     []string{"1.1.1.1"},
+							Type:       corev1.ServiceTypeClusterIP,
+							ClusterIP:  "1.1.1.1",
+							ClusterIPs: []string{"1.1.1.1"},
 							Ports: []corev1.ServicePort{{
 								Name: "port", Port: 80, TargetPort: intstr.FromInt(80), Protocol: corev1.ProtocolTCP}},
 						},
@@ -294,11 +271,6 @@ func Test_ReconcileServiceNodePorts(t *testing.T) {
 				},
 				Spec: corev1.ServiceSpec{
 					Type:       corev1.ServiceTypeClusterIP,
-					IPFamilies: []corev1.IPFamily{corev1.IPv4Protocol},
-					IPFamilyPolicy: func() *corev1.IPFamilyPolicyType {
-						f := corev1.IPFamilyPolicySingleStack
-						return &f
-					}(),
 					ClusterIP:  "1.1.1.1",
 					ClusterIPs: []string{"1.1.1.1"},
 					Ports: []corev1.ServicePort{{

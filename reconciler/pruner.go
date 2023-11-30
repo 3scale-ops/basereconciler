@@ -22,14 +22,14 @@ func (r *Reconciler) pruneOrphaned(ctx context.Context, owner client.Object, man
 
 	ownerGVK, err := apiutil.GVKForObject(owner, r.Scheme)
 	if err != nil {
-		return err
+		return fmt.Errorf("unable to get GVK for owner: %w", err)
 	}
 
 	for _, gvk := range r.typeTracker.seenTypes {
 
 		objectList, err := util.NewObjectListFromGVK(gvk, r.Scheme)
 		if err != nil {
-			return err
+			return fmt.Errorf("unable to get list type for '%s': %w", gvk.String(), err)
 		}
 		err = r.Client.List(ctx, objectList, client.InNamespace(owner.GetNamespace()))
 		if err != nil {

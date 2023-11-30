@@ -21,6 +21,7 @@ import (
 var _ = Describe("Test controller", func() {
 	var namespace string
 	var instance *v1alpha1.Test
+	var resources []client.Object
 
 	BeforeEach(func() {
 		// Create a namespace for each block
@@ -57,62 +58,29 @@ var _ = Describe("Test controller", func() {
 			Eventually(func() error {
 				return k8sClient.Get(context.Background(), types.NamespacedName{Name: "instance", Namespace: namespace}, instance)
 			}, timeout, poll).ShouldNot(HaveOccurred())
+
+			By("checking that owned resources are created")
+			resources = []client.Object{
+				&appsv1.Deployment{ObjectMeta: metav1.ObjectMeta{Name: "deployment", Namespace: namespace}},
+				&corev1.Service{ObjectMeta: metav1.ObjectMeta{Name: "service", Namespace: namespace}},
+				&policyv1.PodDisruptionBudget{ObjectMeta: metav1.ObjectMeta{Name: "pdb", Namespace: namespace}},
+				&autoscalingv2.HorizontalPodAutoscaler{ObjectMeta: metav1.ObjectMeta{Name: "hpa", Namespace: namespace}},
+			}
+
+			for _, res := range resources {
+				Eventually(func() error {
+					return k8sClient.Get(context.Background(), util.ObjectKey(res), res)
+				}, timeout, poll).ShouldNot(HaveOccurred())
+			}
 		})
 
 		AfterEach(func() {
 			k8sClient.Delete(context.Background(), instance, client.PropagationPolicy(metav1.DeletePropagationForeground))
 		})
 
-		It("creates the required resources", func() {
-
-			dep := &appsv1.Deployment{}
-			Eventually(func() error {
-				return k8sClient.Get(
-					context.Background(),
-					types.NamespacedName{Name: "deployment", Namespace: namespace},
-					dep,
-				)
-			}, timeout, poll).ShouldNot(HaveOccurred())
-
-			svc := &corev1.Service{}
-			Eventually(func() error {
-				return k8sClient.Get(
-					context.Background(),
-					types.NamespacedName{Name: "service", Namespace: namespace},
-					svc,
-				)
-			}, timeout, poll).ShouldNot(HaveOccurred())
-
-			pdb := &policyv1.PodDisruptionBudget{}
-			Eventually(func() error {
-				return k8sClient.Get(
-					context.Background(),
-					types.NamespacedName{Name: "pdb", Namespace: namespace},
-					pdb,
-				)
-			}, timeout, poll).ShouldNot(HaveOccurred())
-
-			hpa := &autoscalingv2.HorizontalPodAutoscaler{}
-			Eventually(func() error {
-				return k8sClient.Get(
-					context.Background(),
-					types.NamespacedName{Name: "hpa", Namespace: namespace},
-					hpa,
-				)
-			}, timeout, poll).ShouldNot(HaveOccurred())
-		})
-
 		It("triggers a Deployment rollout on Secret contents change", func() {
 
-			dep := &appsv1.Deployment{}
-			Eventually(func() error {
-				return k8sClient.Get(
-					context.Background(),
-					types.NamespacedName{Name: "deployment", Namespace: namespace},
-					dep,
-				)
-			}, timeout, poll).ShouldNot(HaveOccurred())
-
+			dep := resources[0].(*appsv1.Deployment)
 			// Annotations should be empty when Secret does not exists
 			value, ok := dep.Spec.Template.ObjectMeta.Annotations["example.com/secret.secret-hash"]
 			Expect(ok).To(BeTrue())
@@ -159,108 +127,54 @@ var _ = Describe("Test controller", func() {
 		})
 
 		It("deletes specific resources when disabled", func() {
-			// Wait for resources to be created
-			pdb := &policyv1.PodDisruptionBudget{}
-			Eventually(func() error {
-				return k8sClient.Get(
-					context.Background(),
-					types.NamespacedName{Name: "pdb", Namespace: namespace},
-					pdb,
-				)
-			}, timeout, poll).ShouldNot(HaveOccurred())
-			hpa := &autoscalingv2.HorizontalPodAutoscaler{}
-			Eventually(func() error {
-				return k8sClient.Get(
-					context.Background(),
-					types.NamespacedName{Name: "hpa", Namespace: namespace},
-					hpa,
-				)
-			}, timeout, poll).ShouldNot(HaveOccurred())
+			pdb := resources[2].(*policyv1.PodDisruptionBudget)
+			hpa := resources[3].(*autoscalingv2.HorizontalPodAutoscaler)
 
 			// disable pdb and hpa
-			instance = &v1alpha1.Test{}
-			Eventually(func() error {
-				err := k8sClient.Get(context.Background(), types.NamespacedName{Name: "instance", Namespace: namespace}, instance)
-				if err != nil {
-					return err
-				}
-				instance.Spec.PDB = pointer.Bool(false)
-				instance.Spec.HPA = pointer.Bool(false)
-				err = k8sClient.Update(context.Background(), instance)
-				return err
-
-			}, timeout, poll).ShouldNot(HaveOccurred())
+			patch := client.MergeFrom(instance.DeepCopy())
+			instance.Spec.PDB = util.Pointer(false)
+			instance.Spec.HPA = util.Pointer(false)
+			err := k8sClient.Patch(context.Background(), instance, patch)
+			Expect(err).ToNot(HaveOccurred())
 
 			Eventually(func() error {
-				return k8sClient.Get(
-					context.Background(),
-					types.NamespacedName{Name: "pdb", Namespace: namespace},
-					pdb,
-				)
+				return k8sClient.Get(context.Background(), util.ObjectKey(pdb), pdb)
 			}, timeout, poll).Should(HaveOccurred())
 
 			Eventually(func() error {
-				return k8sClient.Get(
-					context.Background(),
-					types.NamespacedName{Name: "hpa", Namespace: namespace},
-					hpa,
-				)
+				return k8sClient.Get(context.Background(), util.ObjectKey(hpa), hpa)
 			}, timeout, poll).Should(HaveOccurred())
 
 		})
 
 		It("deletes all owned resources when custom resource is deleted", func() {
-			// Wait for all resources to be created
-
-			dep := &appsv1.Deployment{}
-			Eventually(func() error {
-				return k8sClient.Get(
-					context.Background(),
-					types.NamespacedName{Name: "deployment", Namespace: namespace},
-					dep,
-				)
-			}, timeout, poll).ShouldNot(HaveOccurred())
-
-			svc := &corev1.Service{}
-			Eventually(func() error {
-				return k8sClient.Get(
-					context.Background(),
-					types.NamespacedName{Name: "service", Namespace: namespace},
-					svc,
-				)
-			}, timeout, poll).ShouldNot(HaveOccurred())
 
 			// Delete the custom resource
 			err := k8sClient.Delete(context.Background(), instance)
 			Expect(err).ToNot(HaveOccurred())
 
 			Eventually(func() bool {
-				err := k8sClient.Get(context.Background(), types.NamespacedName{Name: "instance", Namespace: namespace}, instance)
+				err := k8sClient.Get(context.Background(), util.ObjectKey(instance), instance)
 				if err != nil && errors.IsNotFound(err) {
 					return true
 				}
 				return false
 			}, timeout, poll).Should(BeTrue())
 
+			for _, resource := range resources {
+				Eventually(func() bool {
+					err := k8sClient.Get(context.Background(), util.ObjectKey(resource), resource)
+					if err != nil && errors.IsNotFound(err) {
+						return true
+					}
+					return false
+				}, timeout, poll).Should(BeTrue())
+			}
+
 		})
 
 		It("updates service annotations", func() {
-			svc := &corev1.Service{}
-			Eventually(func() error {
-				return k8sClient.Get(
-					context.Background(),
-					types.NamespacedName{Name: "service", Namespace: namespace},
-					svc,
-				)
-			}, timeout, poll).ShouldNot(HaveOccurred())
-
-			Eventually(func() error {
-				return k8sClient.Get(
-					context.Background(),
-					types.NamespacedName{Name: "instance", Namespace: namespace},
-					instance,
-				)
-			}, timeout, poll).ShouldNot(HaveOccurred())
+			svc := resources[1].(*corev1.Service)
 
 			patch := client.MergeFrom(instance.DeepCopy())
 			instance.Spec.ServiceAnnotations = map[string]string{"key": "value"}
@@ -268,13 +182,27 @@ var _ = Describe("Test controller", func() {
 			Expect(err).ToNot(HaveOccurred())
 
 			Eventually(func() bool {
-				err := k8sClient.Get(
-					context.Background(),
-					types.NamespacedName{Name: "service", Namespace: namespace},
-					svc,
-				)
-				Expect(err).ToNot(HaveOccurred())
+				if err := k8sClient.Get(context.Background(), util.ObjectKey(svc), svc); err != nil {
+					return false
+				}
 				return svc.GetAnnotations()["key"] == "value"
+			}, timeout, poll).Should(BeTrue())
+		})
+
+		It("prunes the service", func() {
+
+			patch := client.MergeFrom(instance.DeepCopy())
+			instance.Spec.PruneService = util.Pointer(true)
+			err := k8sClient.Patch(context.Background(), instance, patch)
+			Expect(err).ToNot(HaveOccurred())
+
+			svc := resources[1].(*corev1.Service)
+			Eventually(func() bool {
+				err := k8sClient.Get(context.Background(), util.ObjectKey(svc), svc)
+				if err != nil && errors.IsNotFound(err) {
+					return true
+				}
+				return false
 			}, timeout, poll).Should(BeTrue())
 		})
 
