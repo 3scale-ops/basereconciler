@@ -70,7 +70,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 	}
 
 	resources := []resource.TemplateInterface{
-		resource.Template[*appsv1.Deployment]{
+		&resource.Template[*appsv1.Deployment]{
 			TemplateBuilder: deployment(req.Namespace),
 			IsEnabled:       true,
 			EnsureProperties: []resource.Property{
@@ -102,7 +102,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 			},
 		},
 
-		resource.Template[*autoscalingv2.HorizontalPodAutoscaler]{
+		&resource.Template[*autoscalingv2.HorizontalPodAutoscaler]{
 			TemplateBuilder: hpa(req.Namespace),
 			IsEnabled:       instance.Spec.HPA != nil && *instance.Spec.HPA,
 			EnsureProperties: []resource.Property{
@@ -114,7 +114,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 				"spec.metrics",
 			},
 		},
-		resource.Template[*policyv1.PodDisruptionBudget]{
+		&resource.Template[*policyv1.PodDisruptionBudget]{
 			TemplateBuilder: pdb(req.Namespace),
 			IsEnabled:       instance.Spec.PDB != nil && *instance.Spec.PDB,
 			EnsureProperties: []resource.Property{
@@ -128,7 +128,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 	}
 
 	if instance.Spec.PruneService == nil || !*instance.Spec.PruneService {
-		resources = append(resources, resource.Template[*corev1.Service]{
+		resources = append(resources, &resource.Template[*corev1.Service]{
 			TemplateBuilder: service(req.Namespace, instance.Spec.ServiceAnnotations),
 			IsEnabled:       true,
 			EnsureProperties: []resource.Property{

@@ -59,7 +59,7 @@ func TestCreateOrUpdate(t *testing.T) {
 					}).Build(),
 				scheme: scheme.Scheme,
 				owner:  &corev1.ServiceAccount{ObjectMeta: metav1.ObjectMeta{Name: "owner", Namespace: "ns"}},
-				template: Template[*corev1.Service]{
+				template: &Template[*corev1.Service]{
 					TemplateBuilder: func(client.Object) (*corev1.Service, error) {
 						return &corev1.Service{
 							ObjectMeta: metav1.ObjectMeta{
@@ -134,7 +134,7 @@ func TestCreateOrUpdate(t *testing.T) {
 					}).Build(),
 				scheme: scheme.Scheme,
 				owner:  &corev1.ServiceAccount{ObjectMeta: metav1.ObjectMeta{Name: "owner", Namespace: "ns"}},
-				template: Template[*corev1.Service]{
+				template: &Template[*corev1.Service]{
 					TemplateBuilder: func(client.Object) (*corev1.Service, error) {
 						return &corev1.Service{
 							ObjectMeta: metav1.ObjectMeta{
@@ -191,7 +191,7 @@ func TestCreateOrUpdate(t *testing.T) {
 				cl:     fake.NewClientBuilder().Build(),
 				scheme: scheme.Scheme,
 				owner:  &corev1.ServiceAccount{ObjectMeta: metav1.ObjectMeta{Name: "owner", Namespace: "ns"}},
-				template: Template[*corev1.Service]{
+				template: &Template[*corev1.Service]{
 					TemplateBuilder: func(client.Object) (*corev1.Service, error) {
 						return &corev1.Service{
 							ObjectMeta: metav1.ObjectMeta{
@@ -252,7 +252,7 @@ func TestCreateOrUpdate(t *testing.T) {
 				cl:     fake.NewClientBuilder().Build(),
 				scheme: scheme.Scheme,
 				owner:  &corev1.ServiceAccount{ObjectMeta: metav1.ObjectMeta{Name: "owner", Namespace: "ns"}},
-				template: Template[*corev1.Service]{
+				template: &Template[*corev1.Service]{
 					TemplateBuilder: func(client.Object) (*corev1.Service, error) {
 						return &corev1.Service{ObjectMeta: metav1.ObjectMeta{Name: "service", Namespace: "ns"}}, nil
 					},
@@ -271,7 +271,7 @@ func TestCreateOrUpdate(t *testing.T) {
 				cl:     fake.NewClientBuilder().WithObjects(&corev1.Service{ObjectMeta: metav1.ObjectMeta{Name: "service", Namespace: "ns"}}).Build(),
 				scheme: scheme.Scheme,
 				owner:  &corev1.ServiceAccount{ObjectMeta: metav1.ObjectMeta{Name: "owner", Namespace: "ns"}},
-				template: Template[*corev1.Service]{
+				template: &Template[*corev1.Service]{
 					TemplateBuilder: func(client.Object) (*corev1.Service, error) {
 						return &corev1.Service{ObjectMeta: metav1.ObjectMeta{Name: "service", Namespace: "ns"}}, nil
 					},
@@ -290,7 +290,7 @@ func TestCreateOrUpdate(t *testing.T) {
 				cl:     fake.NewClientBuilder().Build(),
 				scheme: scheme.Scheme,
 				owner:  &corev1.ServiceAccount{ObjectMeta: metav1.ObjectMeta{Name: "owner", Namespace: "ns"}},
-				template: Template[*appsv1.Deployment]{
+				template: &Template[*appsv1.Deployment]{
 					TemplateBuilder: func(client.Object) (*appsv1.Deployment, error) {
 						return &appsv1.Deployment{ObjectMeta: metav1.ObjectMeta{Name: "deployment", Namespace: "ns"}}, nil
 					},
@@ -364,7 +364,7 @@ func Test_reconcilerConfig(t *testing.T) {
 		{
 			name: "Returns default config",
 			args: args{
-				template: Template[*corev1.Pod]{},
+				template: &Template[*corev1.Pod]{},
 				gvk:      schema.FromAPIVersionAndKind("v1", "Pod"),
 			},
 			want:    []Property{"metadata.annotations", "metadata.labels", "spec"},
@@ -374,7 +374,7 @@ func Test_reconcilerConfig(t *testing.T) {
 		{
 			name: "Returns explicit config",
 			args: args{
-				template: Template[*corev1.Pod]{
+				template: &Template[*corev1.Pod]{
 					EnsureProperties: []Property{"a.b.c"},
 					IgnoreProperties: []Property{"x"},
 				},
