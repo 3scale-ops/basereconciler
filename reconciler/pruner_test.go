@@ -5,6 +5,7 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/3scale-ops/basereconciler/config"
 	"github.com/3scale-ops/basereconciler/util"
 	appsv1 "k8s.io/api/apps/v1"
 	autoscalingv2 "k8s.io/api/autoscaling/v2"
@@ -214,15 +215,15 @@ func Test_isPrunerEnabled(t *testing.T) {
 					},
 				},
 			},
-			preExec: func() { Config.AnnotationsDomain = "example.com" },
+			preExec: func() { config.SetAnnotationsDomain("example.com") },
 			want:    false,
 		},
 		{
-			name: "Disabled by config",
+			name: "Disabled by global config",
 			args: args{
 				owner: &corev1.Service{},
 			},
-			preExec: func() { Config.ResourcePruner = false },
+			preExec: func() { config.DisableResourcePruner() },
 			want:    false,
 		},
 	}

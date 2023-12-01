@@ -2,6 +2,7 @@ package resource
 
 import (
 	"context"
+	"reflect"
 	"testing"
 
 	"github.com/3scale-ops/basereconciler/util"
@@ -343,6 +344,59 @@ func TestCreateOrUpdate(t *testing.T) {
 				if !tt.wantObjectErr(err) {
 					t.Errorf("CreateOrUpdate() got err retrieving object = %v", err)
 				}
+			}
+		})
+	}
+}
+
+func Test_reconcilerConfig(t *testing.T) {
+	type args struct {
+		template TemplateInterface
+		gvk      schema.GroupVersionKind
+	}
+	tests := []struct {
+		name    string
+		args    args
+		want    []Property
+		want1   []Property
+		wantErr bool
+	}{
+		{
+			name: "Returns default config",
+			args: args{
+				template: Template[*corev1.Pod]{},
+				gvk:      schema.FromAPIVersionAndKind("v1", "Pod"),
+			},
+			want:    []Property{"metadata.annotations", "metadata.labels", "spec"},
+			want1:   []Property{},
+			wantErr: false,
+		},
+		{
+			name: "Returns explicit config",
+			args: args{
+				template: Template[*corev1.Pod]{
+					EnsureProperties: []Property{"a.b.c"},
+					IgnoreProperties: []Property{"x"},
+				},
+				gvk: schema.FromAPIVersionAndKind("v1", "Pod"),
+			},
+			want:    []Property{"a.b.c"},
+			want1:   []Property{"x"},
+			wantErr: false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, got1, err := reconcilerConfig(tt.args.template, tt.args.gvk)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("reconcilerConfig() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("reconcilerConfig() got = %v, want %v", got, tt.want)
+			}
+			if !reflect.DeepEqual(got1, tt.want1) {
+				t.Errorf("reconcilerConfig() got1 = %v, want %v", got1, tt.want1)
 			}
 		})
 	}

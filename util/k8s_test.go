@@ -4,7 +4,6 @@ import (
 	"reflect"
 	"testing"
 
-	monitoringv1 "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -38,18 +37,18 @@ func TestGetItems(t *testing.T) {
 			},
 		},
 		{
-			name: "Returns items of a monitoringv1.PodMonitorList as []client.Object",
+			name: "Returns items of a corev1.PodList as []client.Object",
 			args: args{
-				list: &monitoringv1.PodMonitorList{
-					Items: []*monitoringv1.PodMonitor{
+				list: &corev1.PodList{
+					Items: []corev1.Pod{
 						{ObjectMeta: metav1.ObjectMeta{Name: "one"}},
 						{ObjectMeta: metav1.ObjectMeta{Name: "two"}},
 					},
 				},
 			},
 			want: []client.Object{
-				&monitoringv1.PodMonitor{ObjectMeta: metav1.ObjectMeta{Name: "one"}},
-				&monitoringv1.PodMonitor{ObjectMeta: metav1.ObjectMeta{Name: "two"}},
+				&corev1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "one"}},
+				&corev1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "two"}},
 			},
 		}}
 	for _, tt := range tests {

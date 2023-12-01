@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"github.com/3scale-ops/basereconciler/config"
 	"github.com/3scale-ops/basereconciler/util"
 	"github.com/nsf/jsondiff"
 	corev1 "k8s.io/api/core/v1"
@@ -21,7 +22,8 @@ import (
 )
 
 // CreateOrUpdate cretes or updates resources
-func CreateOrUpdate(ctx context.Context, cl client.Client, scheme *runtime.Scheme, owner client.Object, template TemplateInterface) (*corev1.ObjectReference, error) {
+func CreateOrUpdate(ctx context.Context, cl client.Client, scheme *runtime.Scheme,
+	owner client.Object, template TemplateInterface) (*corev1.ObjectReference, error) {
 
 	desired, err := template.Build(ctx, cl, nil)
 	if err != nil {
@@ -64,13 +66,16 @@ func CreateOrUpdate(ctx context.Context, cl client.Client, scheme *runtime.Schem
 	if !template.Enabled() {
 		err := cl.Delete(ctx, live)
 		if err != nil {
-			return nil, fmt.Errorf("unable to delete object: %w", err)
+			return nil, wrapError("unable to delete object", key, gvk, err)
 		}
 		logger.Info("resource deleted")
 		return nil, nil
 	}
 
-	cfg := template.ReconcilerConfig()
+	ensure, ignore, err := reconcilerConfig(template, gvk)
+	if err != nil {
+		return nil, wrapError("unable to retrieve config for resource reconciler", key, gvk, err)
+	}
 
 	// normalizedLive is a struct that will be populated with only the reconciled
 	// properties and their respective live values. It will be used to compare it with
@@ -100,14 +105,14 @@ func CreateOrUpdate(ctx context.Context, cl client.Client, scheme *runtime.Schem
 	}
 
 	// reconcile properties
-	for _, property := range cfg.ReconcileProperties {
+	for _, property := range ensure {
 		if err := property.Reconcile(u_live, u_desired, u_normzalizedLive, logger); err != nil {
 			return nil, wrapError(fmt.Sprintf("unable to reconcile property %s", property), key, gvk, err)
 		}
 	}
 
 	// ignore properties
-	for _, property := range cfg.IgnoreProperties {
+	for _, property := range ignore {
 		for _, m := range []map[string]any{u_live, u_desired, u_normzalizedLive} {
 			if err := property.Ignore(m); err != nil {
 				return nil, wrapError(fmt.Sprintf("unable to ignore property %s", property), key, gvk, err)
@@ -149,4 +154,19 @@ func printfDiff(a, b client.Object) string {
 
 func wrapError(msg string, key types.NamespacedName, gvk schema.GroupVersionKind, err error) error {
 	return fmt.Errorf("%s %s/%s/%s: %w", msg, gvk.Kind, key.Name, key.Namespace, err)
+}
+
+func reconcilerConfig(template TemplateInterface, gvk schema.GroupVersionKind) ([]Property, []Property, error) {
+
+	if len(template.GetEnsureProperties()) == 0 {
+		cfg, err := config.GetDefaultReconcileConfigForGVK(gvk)
+		if err != nil {
+			return nil, nil, err
+		}
+		ensure := util.ConvertStringSlice[string, Property](cfg.EnsureProperties)
+		ignore := util.ConvertStringSlice[string, Property](cfg.IgnoreProperties)
+		return ensure, ignore, nil
+	}
+
+	return template.GetEnsureProperties(), template.GetIgnoreProperties(), nil
 }

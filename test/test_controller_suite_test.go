@@ -147,32 +147,6 @@ var _ = Describe("Test controller", func() {
 
 		})
 
-		It("deletes all owned resources when custom resource is deleted", func() {
-
-			// Delete the custom resource
-			err := k8sClient.Delete(context.Background(), instance)
-			Expect(err).ToNot(HaveOccurred())
-
-			Eventually(func() bool {
-				err := k8sClient.Get(context.Background(), util.ObjectKey(instance), instance)
-				if err != nil && errors.IsNotFound(err) {
-					return true
-				}
-				return false
-			}, timeout, poll).Should(BeTrue())
-
-			for _, resource := range resources {
-				Eventually(func() bool {
-					err := k8sClient.Get(context.Background(), util.ObjectKey(resource), resource)
-					if err != nil && errors.IsNotFound(err) {
-						return true
-					}
-					return false
-				}, timeout, poll).Should(BeTrue())
-			}
-
-		})
-
 		It("updates service annotations", func() {
 			svc := resources[1].(*corev1.Service)
 

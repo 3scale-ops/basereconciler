@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/3scale-ops/basereconciler/reconciler"
+	"github.com/3scale-ops/basereconciler/config"
 	"github.com/3scale-ops/basereconciler/resource"
 	"github.com/3scale-ops/basereconciler/util"
 	appsv1 "k8s.io/api/apps/v1"
@@ -66,7 +66,7 @@ func (rt RolloutTrigger) GetAnnotationKey(annotationsDomain string) string {
 func (trigger RolloutTrigger) AddToDeployment(params ...string) resource.TemplateMutationFunction {
 	var domain string
 	if len(params) == 0 {
-		domain = reconciler.Config.AnnotationsDomain
+		domain = config.GetAnnotationsDomain()
 	} else {
 		domain = params[0]
 	}
@@ -89,7 +89,7 @@ func (trigger RolloutTrigger) AddToDeployment(params ...string) resource.Templat
 func (trigger RolloutTrigger) AddToStatefulSet(params ...string) resource.TemplateMutationFunction {
 	var domain string
 	if len(params) == 0 {
-		domain = reconciler.Config.AnnotationsDomain
+		domain = config.GetAnnotationsDomain()
 	} else {
 		domain = params[0]
 	}

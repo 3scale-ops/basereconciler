@@ -9,17 +9,13 @@ import (
 type TemplateInterface interface {
 	Build(ctx context.Context, cl client.Client, o client.Object) (client.Object, error)
 	Enabled() bool
-	ReconcilerConfig() ReconcilerConfig
+	GetEnsureProperties() []Property
+	GetIgnoreProperties() []Property
 }
 
 type TemplateBuilderFunction[T client.Object] func(client.Object) (T, error)
 
 type TemplateMutationFunction func(context.Context, client.Client, client.Object) error
-
-type ReconcilerConfig struct {
-	ReconcileProperties []Property
-	IgnoreProperties    []Property
-}
 
 type Template[T client.Object] struct {
 	TemplateBuilder   TemplateBuilderFunction[T]
@@ -48,14 +44,26 @@ func (t Template[T]) Enabled() bool {
 	return t.IsEnabled
 }
 
-// Enabled indicates if the resource should be present or not
-func (t Template[T]) ReconcilerConfig() ReconcilerConfig {
-	// TODO: return a set of defaults if not set
-	return ReconcilerConfig{
-		ReconcileProperties: t.EnsureProperties,
-		IgnoreProperties:    t.IgnoreProperties,
-	}
+// GetEnsureProperties returns the list of properties that should be reconciled
+func (t Template[T]) GetEnsureProperties() []Property {
+	return t.EnsureProperties
 }
+
+// GetIgnoreProperties returns the list of properties that should be ignored
+func (t Template[T]) GetIgnoreProperties() []Property {
+	return t.IgnoreProperties
+}
+
+// func (t Template[T]) GVK() (schema.GroupVersionKind, error) {
+// 	o, err := t.TemplateBuilder(o)
+// 	if err != nil {
+// 		return schema.GroupVersionKind{}, err
+// 	}
+// 	gvk, err := apiutil.GVKForObject(o, scheme)
+// 	if err != nil {
+// 		return nil, err
+// 	}
+// }
 
 func (t Template[T]) ChainTemplateBuilder(mutation TemplateBuilderFunction[T]) Template[T] {
 

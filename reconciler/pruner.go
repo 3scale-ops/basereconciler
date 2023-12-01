@@ -7,8 +7,8 @@ import (
 	"strconv"
 	"sync"
 
+	"github.com/3scale-ops/basereconciler/config"
 	"github.com/3scale-ops/basereconciler/util"
-	"github.com/samber/lo"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -38,10 +38,10 @@ func (r *Reconciler) pruneOrphaned(ctx context.Context, owner client.Object, man
 
 		for _, obj := range util.GetItems(objectList) {
 
-			owned := lo.ContainsBy(obj.GetOwnerReferences(), func(ref metav1.OwnerReference) bool {
+			owned := util.ContainsBy(obj.GetOwnerReferences(), func(ref metav1.OwnerReference) bool {
 				return ref.Kind == ownerGVK.Kind && ref.Name == owner.GetName() && ref.APIVersion == ownerGVK.GroupVersion().String()
 			})
-			managed := lo.ContainsBy(managed, func(ref corev1.ObjectReference) bool {
+			managed := util.ContainsBy(managed, func(ref corev1.ObjectReference) bool {
 				return ref.Name == obj.GetName() && ref.Namespace == obj.GetNamespace() && ref.Kind == gvk.Kind && ref.APIVersion == gvk.GroupVersion().String()
 			})
 
@@ -63,14 +63,14 @@ func isPrunerEnabled(owner client.Object) bool {
 	prune := true
 
 	// get the per resource switch (annotation)
-	if value, ok := owner.GetAnnotations()[fmt.Sprintf("%s/prune", Config.AnnotationsDomain)]; ok {
+	if value, ok := owner.GetAnnotations()[fmt.Sprintf("%s/prune", config.GetAnnotationsDomain())]; ok {
 		var err error
 		prune, err = strconv.ParseBool(value)
 		if err != nil {
 			prune = true
 		}
 	}
-	return prune && Config.ResourcePruner
+	return prune && config.IsResourcePrunerEnabled()
 }
 
 type typeTracker struct {
@@ -79,7 +79,7 @@ type typeTracker struct {
 }
 
 func (tt *typeTracker) trackType(gvk schema.GroupVersionKind) {
-	if !lo.ContainsBy(tt.seenTypes, func(x schema.GroupVersionKind) bool {
+	if !util.ContainsBy(tt.seenTypes, func(x schema.GroupVersionKind) bool {
 		return reflect.DeepEqual(x, gvk)
 	}) {
 		tt.mu.Lock()

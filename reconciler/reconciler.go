@@ -111,7 +111,6 @@ func (r *Reconciler) ManageCleanupLogic(instance client.Object, fns []func(), lo
 // ReconcileOwnedResources handles generalized resource reconcile logic for
 // all controllers
 func (r *Reconciler) ReconcileOwnedResources(ctx context.Context, owner client.Object, list []resource.TemplateInterface) error {
-
 	managedResources := []corev1.ObjectReference{}
 
 	for _, template := range list {
