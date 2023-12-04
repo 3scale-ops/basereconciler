@@ -15,6 +15,12 @@ type TemplateInterface interface {
 
 type TemplateBuilderFunction[T client.Object] func(client.Object) (T, error)
 
+func NewBuilderFunctionFromObject[T client.Object](template T) TemplateBuilderFunction[T] {
+	return func(o client.Object) (T, error) {
+		return template, nil
+	}
+}
+
 type TemplateMutationFunction func(context.Context, client.Client, client.Object) error
 
 type Template[T client.Object] struct {
@@ -23,6 +29,17 @@ type Template[T client.Object] struct {
 	IsEnabled         bool
 	EnsureProperties  []Property
 	IgnoreProperties  []Property
+}
+
+func NewTemplate[T client.Object](tb TemplateBuilderFunction[T],
+	enabled bool, mutations ...TemplateMutationFunction) *Template[T] {
+	return &Template[T]{
+		TemplateBuilder:   tb,
+		TemplateMutations: mutations,
+		IsEnabled:         enabled,
+		EnsureProperties:  []Property{},
+		IgnoreProperties:  []Property{},
+	}
 }
 
 // Build returns a T resource by executing its template function
