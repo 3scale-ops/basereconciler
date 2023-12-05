@@ -71,8 +71,8 @@ func (t *Template[T]) GetIgnoreProperties() []Property {
 	return t.IgnoreProperties
 }
 
-// ChainTemplateBuilder chains template functions to make them composable
-func (t *Template[T]) ChainTemplateBuilder(mutation TemplateBuilderFunction[T]) *Template[T] {
+// Apply chains template functions to make them composable
+func (t *Template[T]) Apply(mutation TemplateBuilderFunction[T]) *Template[T] {
 
 	fn := t.TemplateBuilder
 	t.TemplateBuilder = func(in client.Object) (T, error) {
@@ -86,6 +86,6 @@ func (t *Template[T]) ChainTemplateBuilder(mutation TemplateBuilderFunction[T]) 
 	return t
 }
 
-func (t *Template[T]) C(mutation TemplateBuilderFunction[T]) *Template[T] {
-	return t.ChainTemplateBuilder(mutation)
+func (t *Template[T]) Chain(mutation TemplateBuilderFunction[T]) *Template[T] {
+	return t.Apply(mutation)
 }

@@ -11,7 +11,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 )
 
-func TestTemplate_ChainTemplateBuilder(t *testing.T) {
+func TestTemplate_Apply(t *testing.T) {
 
 	podTemplate := &Template[*corev1.Pod]{
 		TemplateBuilder: func(client.Object) (*corev1.Pod, error) {
@@ -21,7 +21,7 @@ func TestTemplate_ChainTemplateBuilder(t *testing.T) {
 		},
 	}
 
-	podTemplate.ChainTemplateBuilder(func(o client.Object) (*corev1.Pod, error) {
+	podTemplate.Apply(func(o client.Object) (*corev1.Pod, error) {
 		o.SetAnnotations(map[string]string{"key": "value"})
 		return o.(*corev1.Pod), nil
 	})
@@ -32,6 +32,6 @@ func TestTemplate_ChainTemplateBuilder(t *testing.T) {
 	}
 
 	if diff := cmp.Diff(got, want); len(diff) > 0 {
-		t.Errorf("(Template).ChainTemplateBuilder() diff = %v", diff)
+		t.Errorf("(Template).Apply() diff = %v", diff)
 	}
 }
