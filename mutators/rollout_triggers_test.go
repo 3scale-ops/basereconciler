@@ -156,7 +156,7 @@ func TestRolloutTrigger_GetAnnotationKey(t *testing.T) {
 	}
 }
 
-func TestRolloutTrigger_AddToDeployment(t *testing.T) {
+func TestRolloutTrigger_Add(t *testing.T) {
 	type fields struct {
 		Name          string
 		ConfigMapName *string
@@ -176,7 +176,7 @@ func TestRolloutTrigger_AddToDeployment(t *testing.T) {
 		wantErr bool
 	}{
 		{
-			name: "Adds rollout annotation to Deplotment's pods",
+			name: "Adds rollout annotation to Deployment's pods",
 			fields: fields{
 				Name:          "cm",
 				ConfigMapName: util.Pointer("cm"),
@@ -187,7 +187,6 @@ func TestRolloutTrigger_AddToDeployment(t *testing.T) {
 				cl: fake.NewClientBuilder().WithObjects(
 					&corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Name: "cm", Namespace: "ns"},
 						Data: map[string]string{"key": "data"}},
-					&appsv1.Deployment{ObjectMeta: metav1.ObjectMeta{Name: "cm", Namespace: "ns"}},
 				).Build(),
 				desired: &appsv1.Deployment{ObjectMeta: metav1.ObjectMeta{Name: "cm", Namespace: "ns"}},
 			},
@@ -199,46 +198,8 @@ func TestRolloutTrigger_AddToDeployment(t *testing.T) {
 			},
 			wantErr: false,
 		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			trigger := RolloutTrigger{
-				Name:          tt.fields.Name,
-				ConfigMapName: tt.fields.ConfigMapName,
-				SecretName:    tt.fields.SecretName,
-			}
-			err := trigger.AddToDeployment(tt.args.domain)(tt.args.ctx, tt.args.cl, tt.args.desired)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("RolloutTrigger.AddToDeployment() error = %v, wantErr %v", err, tt.wantErr)
-			}
-			if diff := cmp.Diff(tt.args.desired, tt.want, util.IgnoreProperty("ResourceVersion")); len(diff) > 0 {
-				t.Errorf("RolloutTrigger.AddToDeployment() diff = %v", diff)
-			}
-		})
-	}
-}
-
-func TestRolloutTrigger_AddToStatefulSet(t *testing.T) {
-	type fields struct {
-		Name          string
-		ConfigMapName *string
-		SecretName    *string
-	}
-	type args struct {
-		domain  string
-		ctx     context.Context
-		cl      client.Client
-		desired client.Object
-	}
-	tests := []struct {
-		name    string
-		fields  fields
-		args    args
-		want    client.Object
-		wantErr bool
-	}{
 		{
-			name: "Adds rollout annotation to Deplotment's pods",
+			name: "Adds rollout annotation to Deployment's pods (II)",
 			fields: fields{
 				Name:          "cm",
 				ConfigMapName: util.Pointer("cm"),
@@ -249,7 +210,35 @@ func TestRolloutTrigger_AddToStatefulSet(t *testing.T) {
 				cl: fake.NewClientBuilder().WithObjects(
 					&corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Name: "cm", Namespace: "ns"},
 						Data: map[string]string{"key": "data"}},
-					&appsv1.StatefulSet{ObjectMeta: metav1.ObjectMeta{Name: "cm", Namespace: "ns"}},
+				).Build(),
+				desired: &appsv1.Deployment{
+					ObjectMeta: metav1.ObjectMeta{Name: "cm", Namespace: "ns"},
+					Spec: appsv1.DeploymentSpec{
+						Template: corev1.PodTemplateSpec{
+							ObjectMeta: metav1.ObjectMeta{
+								Annotations: map[string]string{"key": "label"},
+							}}}},
+			},
+			want: &appsv1.Deployment{
+				ObjectMeta: metav1.ObjectMeta{Name: "cm", Namespace: "ns"},
+				Spec: appsv1.DeploymentSpec{Template: corev1.PodTemplateSpec{ObjectMeta: metav1.ObjectMeta{
+					Annotations: map[string]string{"example.com/cm.configmap-hash": util.Hash(map[string]string{"key": "data"}), "key": "label"},
+				}}},
+			},
+			wantErr: false,
+		},
+		{
+			name: "Adds rollout annotation to StatefulSet's pods",
+			fields: fields{
+				Name:          "cm",
+				ConfigMapName: util.Pointer("cm"),
+			},
+			args: args{
+				domain: "example.com",
+				ctx:    context.TODO(),
+				cl: fake.NewClientBuilder().WithObjects(
+					&corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Name: "cm", Namespace: "ns"},
+						Data: map[string]string{"key": "data"}},
 				).Build(),
 				desired: &appsv1.StatefulSet{ObjectMeta: metav1.ObjectMeta{Name: "cm", Namespace: "ns"}},
 			},
@@ -269,12 +258,12 @@ func TestRolloutTrigger_AddToStatefulSet(t *testing.T) {
 				ConfigMapName: tt.fields.ConfigMapName,
 				SecretName:    tt.fields.SecretName,
 			}
-			err := trigger.AddToStatefulSet(tt.args.domain)(tt.args.ctx, tt.args.cl, tt.args.desired)
+			err := trigger.Add(tt.args.domain)(tt.args.ctx, tt.args.cl, tt.args.desired)
 			if (err != nil) != tt.wantErr {
-				t.Errorf("RolloutTrigger.AddToStatefulSet() error = %v, wantErr %v", err, tt.wantErr)
+				t.Errorf("RolloutTrigger.Add() error = %v, wantErr %v", err, tt.wantErr)
 			}
 			if diff := cmp.Diff(tt.args.desired, tt.want, util.IgnoreProperty("ResourceVersion")); len(diff) > 0 {
-				t.Errorf("RolloutTrigger.AddToStatefulSet() diff = %v", diff)
+				t.Errorf("RolloutTrigger.Add() diff = %v", diff)
 			}
 		})
 	}

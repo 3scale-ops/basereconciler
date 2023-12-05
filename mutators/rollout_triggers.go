@@ -62,8 +62,8 @@ func (rt RolloutTrigger) GetAnnotationKey(annotationsDomain string) string {
 	return fmt.Sprintf("%s/%s.%s", string(annotationsDomain), rt.Name, "configmap-hash")
 }
 
-// reconcileRolloutTriggers modifies the Deployment with the appropriate rollout triggers (annotations)
-func (trigger RolloutTrigger) AddToDeployment(params ...string) resource.TemplateMutationFunction {
+// Add adds the trigger to the Deployment/StatefulSet
+func (trigger RolloutTrigger) Add(params ...string) resource.TemplateMutationFunction {
 	var domain string
 	if len(params) == 0 {
 		domain = config.GetAnnotationsDomain()
@@ -72,38 +72,19 @@ func (trigger RolloutTrigger) AddToDeployment(params ...string) resource.Templat
 	}
 	return func(ctx context.Context, cl client.Client, desired client.Object) error {
 
-		ddep := desired.(*appsv1.Deployment)
-		if ddep.Spec.Template.ObjectMeta.Annotations == nil {
-			ddep.Spec.Template.ObjectMeta.Annotations = map[string]string{}
-		}
-		hash, err := trigger.GetHash(ctx, cl, ddep.GetNamespace())
+		hash, err := trigger.GetHash(ctx, cl, desired.GetNamespace())
 		if err != nil {
 			return err
 		}
-		ddep.Spec.Template.ObjectMeta.Annotations[trigger.GetAnnotationKey(domain)] = hash
-		return nil
-	}
-}
+		trigger := map[string]string{trigger.GetAnnotationKey(domain): hash}
 
-// reconcileRolloutTriggers modifies the StatefulSet with the appropriate rollout triggers (annotations)
-func (trigger RolloutTrigger) AddToStatefulSet(params ...string) resource.TemplateMutationFunction {
-	var domain string
-	if len(params) == 0 {
-		domain = config.GetAnnotationsDomain()
-	} else {
-		domain = params[0]
-	}
-	return func(ctx context.Context, cl client.Client, desired client.Object) error {
+		switch o := desired.(type) {
+		case *appsv1.Deployment:
+			o.Spec.Template.ObjectMeta.Annotations = util.MergeMaps(map[string]string{}, o.Spec.Template.ObjectMeta.Annotations, trigger)
+		case *appsv1.StatefulSet:
+			o.Spec.Template.ObjectMeta.Annotations = util.MergeMaps(map[string]string{}, o.Spec.Template.ObjectMeta.Annotations, trigger)
+		}
 
-		dss := desired.(*appsv1.StatefulSet)
-		if dss.Spec.Template.ObjectMeta.Annotations == nil {
-			dss.Spec.Template.ObjectMeta.Annotations = map[string]string{}
-		}
-		hash, err := trigger.GetHash(ctx, cl, dss.GetNamespace())
-		if err != nil {
-			return err
-		}
-		dss.Spec.Template.ObjectMeta.Annotations[trigger.GetAnnotationKey(domain)] = hash
 		return nil
 	}
 }

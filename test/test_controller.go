@@ -39,16 +39,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/source"
 )
 
-// func init() {
-// 	reconciler.Config.AnnotationsDomain = "example.com"
-// 	reconciler.Config.ResourcePruner = true
-// 	reconciler.Config.ManagedTypes = reconciler.NewManagedTypes().
-// 		Register(&corev1.ServiceList{}).
-// 		Register(&appsv1.DeploymentList{}).
-// 		Register(&autoscalingv2.HorizontalPodAutoscalerList{}).
-// 		Register(&policyv1.PodDisruptionBudgetList{})
-// }
-
 // Reconciler reconciles a Test object
 // +kubebuilder:object:generate=false
 type Reconciler struct {
@@ -98,7 +88,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 				mutators.RolloutTrigger{
 					Name:       "secret",
 					SecretName: pointer.String("secret"),
-				}.AddToDeployment("example.com"),
+				}.Add("example.com"),
 			},
 		},
 
