@@ -84,7 +84,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 				"spec.template.spec.containers[*].terminationMessagePolicy",
 			},
 			TemplateMutations: []resource.TemplateMutationFunction{
-				mutators.ReconcileDeploymentReplicas(true),
+				mutators.SetDeploymentReplicas(true),
 				mutators.RolloutTrigger{
 					Name:       "secret",
 					SecretName: pointer.String("secret"),
@@ -130,7 +130,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 				"spec.clusterIP",
 			},
 			TemplateMutations: []resource.TemplateMutationFunction{
-				mutators.ReconcileServiceNodePorts(),
+				mutators.SetServiceLiveValues(),
 			},
 		})
 	}

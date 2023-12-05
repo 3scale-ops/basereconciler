@@ -16,7 +16,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 )
 
-func TestReconcileDeploymentReplicas(t *testing.T) {
+func TestSetDeploymentReplicas(t *testing.T) {
 	type args struct {
 		enforce bool
 		ctx     context.Context
@@ -91,17 +91,17 @@ func TestReconcileDeploymentReplicas(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if err := ReconcileDeploymentReplicas(tt.args.enforce)(tt.args.ctx, tt.args.cl, tt.args.desired); (err != nil) != tt.wantErr {
-				t.Errorf("ReconcileDeploymentReplicas() error = %v, wantErr %v", err, tt.wantErr)
+			if err := SetDeploymentReplicas(tt.args.enforce)(tt.args.ctx, tt.args.cl, tt.args.desired); (err != nil) != tt.wantErr {
+				t.Errorf("SetDeploymentReplicas() error = %v, wantErr %v", err, tt.wantErr)
 			}
 			if diff := cmp.Diff(tt.args.desired, tt.want); len(diff) > 0 {
-				t.Errorf("ReconcileDeploymentReplicas() = diff %s", diff)
+				t.Errorf("SetDeploymentReplicas() = diff %s", diff)
 			}
 		})
 	}
 }
 
-func Test_ReconcileServiceNodePorts(t *testing.T) {
+func Test_SetServiceLiveValues(t *testing.T) {
 	type args struct {
 		ctx     context.Context
 		cl      client.Client
@@ -308,11 +308,11 @@ func Test_ReconcileServiceNodePorts(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if err := ReconcileServiceNodePorts()(tt.args.ctx, tt.args.cl, tt.args.desired); (err != nil) != tt.wantErr {
-				t.Errorf("ReconcileServiceNodePorts() error = %v, wantErr %v", err, tt.wantErr)
+			if err := SetServiceLiveValues()(tt.args.ctx, tt.args.cl, tt.args.desired); (err != nil) != tt.wantErr {
+				t.Errorf("SetServiceLiveValues() error = %v, wantErr %v", err, tt.wantErr)
 			}
 			if diff := cmp.Diff(tt.args.desired, tt.want); len(diff) > 0 {
-				t.Errorf("ReconcileServiceNodePorts() = diff %s", diff)
+				t.Errorf("SetServiceLiveValues() = diff %s", diff)
 			}
 		})
 	}

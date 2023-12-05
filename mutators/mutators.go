@@ -13,7 +13,7 @@ import (
 )
 
 // reconcileDeploymentReplicas reconciles the number of replicas of a Deployment
-func ReconcileDeploymentReplicas(enforce bool) resource.TemplateMutationFunction {
+func SetDeploymentReplicas(enforce bool) resource.TemplateMutationFunction {
 	return func(ctx context.Context, cl client.Client, desired client.Object) error {
 		if enforce {
 			// Let the value in the template
@@ -36,7 +36,7 @@ func ReconcileDeploymentReplicas(enforce bool) resource.TemplateMutationFunction
 	}
 }
 
-func ReconcileServiceNodePorts() resource.TemplateMutationFunction {
+func SetServiceLiveValues() resource.TemplateMutationFunction {
 	return func(ctx context.Context, cl client.Client, desired client.Object) error {
 
 		svc := desired.(*corev1.Service)
