@@ -53,7 +53,7 @@ func (t *Template[T]) Build(ctx context.Context, cl client.Client, o client.Obje
 			return nil, err
 		}
 	}
-	return o, nil
+	return o.DeepCopyObject().(client.Object), nil
 }
 
 // Enabled indicates if the resource should be present or not
