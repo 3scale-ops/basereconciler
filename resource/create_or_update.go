@@ -99,21 +99,21 @@ func CreateOrUpdate(ctx context.Context, cl client.Client, scheme *runtime.Schem
 		return nil, wrapError("unable to convert to unstructured", key, gvk, err)
 	}
 
-	u_normzalizedLive, err := runtime.DefaultUnstructuredConverter.ToUnstructured(normalizedLive)
+	u_normalizedLive, err := runtime.DefaultUnstructuredConverter.ToUnstructured(normalizedLive)
 	if err != nil {
 		return nil, wrapError("unable to convert to unstructured", key, gvk, err)
 	}
 
 	// reconcile properties
 	for _, property := range ensure {
-		if err := property.Reconcile(u_live, u_desired, u_normzalizedLive, logger); err != nil {
+		if err := property.Reconcile(u_live, u_desired, u_normalizedLive, logger); err != nil {
 			return nil, wrapError(fmt.Sprintf("unable to reconcile property %s", property), key, gvk, err)
 		}
 	}
 
 	// ignore properties
 	for _, property := range ignore {
-		for _, m := range []map[string]any{u_live, u_desired, u_normzalizedLive} {
+		for _, m := range []map[string]any{u_live, u_desired, u_normalizedLive} {
 			if err := property.Ignore(m); err != nil {
 				return nil, wrapError(fmt.Sprintf("unable to ignore property %s", property), key, gvk, err)
 			}
@@ -121,7 +121,10 @@ func CreateOrUpdate(ctx context.Context, cl client.Client, scheme *runtime.Schem
 	}
 
 	// do the comparison using structs so "equality.Semantic" can be used
-	if err := runtime.DefaultUnstructuredConverter.FromUnstructured(u_normzalizedLive, normalizedLive); err != nil {
+	if err := runtime.DefaultUnstructuredConverter.FromUnstructured(u_normalizedLive, normalizedLive); err != nil {
+		return nil, wrapError("unable to convert from unstructured", key, gvk, err)
+	}
+	if err := runtime.DefaultUnstructuredConverter.FromUnstructured(u_desired, desired); err != nil {
 		return nil, wrapError("unable to convert from unstructured", key, gvk, err)
 	}
 	if !equality.Semantic.DeepEqual(normalizedLive, desired) {
