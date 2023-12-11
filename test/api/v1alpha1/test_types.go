@@ -20,7 +20,7 @@ limitations under the License.
 package v1alpha1
 
 import (
-	"github.com/3scale-ops/basereconciler/status"
+	"github.com/3scale-ops/basereconciler/reconciler"
 	appsv1 "k8s.io/api/apps/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -55,8 +55,8 @@ type TestSpec struct {
 type TestStatus struct {
 	// +operator-sdk:csv:customresourcedefinitions:type=spec
 	// +optional
-	*appsv1.DeploymentStatus              `json:"deploymentStatus,omitempty"`
-	status.UnimplementedStatefulSetStatus `json:"-"`
+	*appsv1.DeploymentStatus                  `json:"deploymentStatus,omitempty"`
+	reconciler.UnimplementedStatefulSetStatus `json:"-"`
 }
 
 func (dss *TestStatus) GetDeploymentStatus(key types.NamespacedName) *appsv1.DeploymentStatus {
@@ -79,9 +79,9 @@ type Test struct {
 	Status TestStatus `json:"status,omitempty"`
 }
 
-var _ status.ObjectWithAppStatus = &Test{}
+var _ reconciler.ObjectWithAppStatus = &Test{}
 
-func (t *Test) GetStatus() status.AppStatus {
+func (t *Test) GetStatus() reconciler.AppStatus {
 	return &t.Status
 }
 
