@@ -5,7 +5,6 @@ package config
 
 import (
 	"fmt"
-	"reflect"
 
 	"k8s.io/apimachinery/pkg/runtime/schema"
 )
@@ -78,7 +77,7 @@ func GetDefaultReconcileConfigForGVK(gvk schema.GroupVersionKind) (ReconcileConf
 // If the passed GVK is an empty one ("schema.GroupVersionKind{}"), the function will set the wildcard instead, which
 // is a default set of basic reconclie rules that the reconciler will try to use when no other configuration is available.
 func SetDefaultReconcileConfigForGVK(gvk schema.GroupVersionKind, cfg ReconcileConfigForGVK) {
-	if reflect.DeepEqual(gvk, schema.GroupVersionKind{}) {
+	if gvk.Empty() {
 		config.defaultResourceReconcileConfig["*"] = cfg
 	} else {
 		config.defaultResourceReconcileConfig[gvk.String()] = cfg

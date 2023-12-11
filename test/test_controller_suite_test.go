@@ -69,7 +69,7 @@ var _ = Describe("Test controller", func() {
 
 			for _, res := range resources {
 				Eventually(func() error {
-					return k8sClient.Get(context.Background(), util.ObjectKey(res), res)
+					return k8sClient.Get(context.Background(), client.ObjectKeyFromObject(res), res)
 				}, timeout, poll).ShouldNot(HaveOccurred())
 			}
 		})
@@ -138,11 +138,11 @@ var _ = Describe("Test controller", func() {
 			Expect(err).ToNot(HaveOccurred())
 
 			Eventually(func() error {
-				return k8sClient.Get(context.Background(), util.ObjectKey(pdb), pdb)
+				return k8sClient.Get(context.Background(), client.ObjectKeyFromObject(pdb), pdb)
 			}, timeout, poll).Should(HaveOccurred())
 
 			Eventually(func() error {
-				return k8sClient.Get(context.Background(), util.ObjectKey(hpa), hpa)
+				return k8sClient.Get(context.Background(), client.ObjectKeyFromObject(hpa), hpa)
 			}, timeout, poll).Should(HaveOccurred())
 
 		})
@@ -156,7 +156,7 @@ var _ = Describe("Test controller", func() {
 			Expect(err).ToNot(HaveOccurred())
 
 			Eventually(func() bool {
-				if err := k8sClient.Get(context.Background(), util.ObjectKey(svc), svc); err != nil {
+				if err := k8sClient.Get(context.Background(), client.ObjectKeyFromObject(svc), svc); err != nil {
 					return false
 				}
 				return svc.GetAnnotations()["key"] == "value"
@@ -172,7 +172,7 @@ var _ = Describe("Test controller", func() {
 
 			svc := resources[1].(*corev1.Service)
 			Eventually(func() bool {
-				err := k8sClient.Get(context.Background(), util.ObjectKey(svc), svc)
+				err := k8sClient.Get(context.Background(), client.ObjectKeyFromObject(svc), svc)
 				if err != nil && errors.IsNotFound(err) {
 					return true
 				}

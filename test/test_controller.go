@@ -34,27 +34,24 @@ import (
 	"k8s.io/utils/pointer"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/source"
 )
 
 // Reconciler reconciles a Test object
 // +kubebuilder:object:generate=false
 type Reconciler struct {
-	reconciler.Reconciler
+	*reconciler.Reconciler
 }
 
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
 // move the current state of the cluster closer to the desired state.
 func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	logger := r.Log.WithValues("name", req.Name, "namespace", req.Namespace)
-	ctx = log.IntoContext(ctx, logger)
 
-	instance := &v1alpha1.Test{}
-	key := types.NamespacedName{Name: req.Name, Namespace: req.Namespace}
-	result, err := r.GetInstance(ctx, key, instance, nil, nil)
-	if result != nil || err != nil {
-		return *result, err
+	ctx, _ = r.Logger(ctx, "name", req.Name, "namespace", req.Namespace)
+	obj := &v1alpha1.Test{}
+	result := r.GetInstance(ctx, req, obj, nil, nil)
+	if result.IsReturnAndRequeue() {
+		return result.Values()
 	}
 
 	resources := []resource.TemplateInterface{
@@ -92,7 +89,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 
 		&resource.Template[*autoscalingv2.HorizontalPodAutoscaler]{
 			TemplateBuilder: hpa(req.Namespace),
-			IsEnabled:       instance.Spec.HPA != nil && *instance.Spec.HPA,
+			IsEnabled:       obj.Spec.HPA != nil && *obj.Spec.HPA,
 			EnsureProperties: []resource.Property{
 				"metadata.annotations",
 				"metadata.labels",
@@ -104,7 +101,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 		},
 		&resource.Template[*policyv1.PodDisruptionBudget]{
 			TemplateBuilder: pdb(req.Namespace),
-			IsEnabled:       instance.Spec.PDB != nil && *instance.Spec.PDB,
+			IsEnabled:       obj.Spec.PDB != nil && *obj.Spec.PDB,
 			EnsureProperties: []resource.Property{
 				"metadata.annotations",
 				"metadata.labels",
@@ -115,9 +112,9 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 		},
 	}
 
-	if instance.Spec.PruneService == nil || !*instance.Spec.PruneService {
+	if obj.Spec.PruneService == nil || !*obj.Spec.PruneService {
 		resources = append(resources, &resource.Template[*corev1.Service]{
-			TemplateBuilder: service(req.Namespace, instance.Spec.ServiceAnnotations),
+			TemplateBuilder: service(req.Namespace, obj.Spec.ServiceAnnotations),
 			IsEnabled:       true,
 			EnsureProperties: []resource.Property{
 				"metadata.annotations",
@@ -133,17 +130,16 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 		})
 	}
 
-	err = r.ReconcileOwnedResources(ctx, instance, resources)
-	if err != nil {
-		logger.Error(err, "unable to reconcile owned resources")
-		return ctrl.Result{}, err
+	result = r.ReconcileOwnedResources(ctx, obj, resources)
+	if result.IsReturnAndRequeue() {
+		return result.Values()
 	}
 
 	// reconcile the status
-	err = r.ReconcileStatus(ctx, instance,
-		[]types.NamespacedName{{Name: "deployment", Namespace: instance.GetNamespace()}}, nil)
-	if err != nil {
-		return ctrl.Result{}, err
+	result = r.ReconcileStatus(ctx, obj,
+		[]types.NamespacedName{{Name: "deployment", Namespace: obj.GetNamespace()}}, nil)
+	if result.IsReturnAndRequeue() {
+		return result.Values()
 	}
 
 	return ctrl.Result{}, nil

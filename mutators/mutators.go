@@ -5,7 +5,6 @@ import (
 	"fmt"
 
 	"github.com/3scale-ops/basereconciler/resource"
-	"github.com/3scale-ops/basereconciler/util"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -35,7 +34,7 @@ func SetDeploymentReplicas(enforce bool) resource.TemplateMutationFunction {
 		}
 
 		live := &appsv1.Deployment{}
-		if err := cl.Get(ctx, util.ObjectKey(desired), live); err != nil {
+		if err := cl.Get(ctx, client.ObjectKeyFromObject(desired), live); err != nil {
 			if errors.IsNotFound(err) {
 				return nil
 			}
@@ -71,7 +70,7 @@ func SetServiceLiveValues() resource.TemplateMutationFunction {
 
 		svc := desired.(*corev1.Service)
 		live := &corev1.Service{}
-		if err := cl.Get(ctx, util.ObjectKey(desired), live); err != nil {
+		if err := cl.Get(ctx, client.ObjectKeyFromObject(desired), live); err != nil {
 			if errors.IsNotFound(err) {
 				return nil
 			}

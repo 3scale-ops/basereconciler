@@ -22,7 +22,8 @@ import (
 )
 
 // CreateOrUpdate cretes or updates resources. The function receives several paremters:
-//   - ctx: the context
+//   - ctx: the context. The logger is expected to be within the context, otherwise the function won't
+//     produce any logs.
 //   - cl: the kubernetes API client
 //   - scheme: the kubernetes API scheme
 //   - owner: the object that owns the resource. Used to set the OwnerReference in the resource
@@ -37,7 +38,7 @@ func CreateOrUpdate(ctx context.Context, cl client.Client, scheme *runtime.Schem
 		return nil, fmt.Errorf("unable to build template: %w", err)
 	}
 
-	key := util.ObjectKey(desired)
+	key := client.ObjectKeyFromObject(desired)
 	gvk, err := apiutil.GVKForObject(desired, scheme)
 	if err != nil {
 		return nil, err

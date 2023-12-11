@@ -50,27 +50,19 @@ type Template[T client.Object] struct {
 }
 
 // NewTemplate returns a new Template struct using the passed parameters
-func NewTemplate[T client.Object](tb TemplateBuilderFunction[T],
-	enabled bool, mutations ...TemplateMutationFunction) *Template[T] {
+func NewTemplate[T client.Object](tb TemplateBuilderFunction[T]) *Template[T] {
 	return &Template[T]{
-		TemplateBuilder:   tb,
-		TemplateMutations: mutations,
-		IsEnabled:         enabled,
-		EnsureProperties:  []Property{},
-		IgnoreProperties:  []Property{},
+		TemplateBuilder: tb,
+		IsEnabled:       true,
 	}
 }
 
 // NewTemplateFromObjectFunction returns a new Template using the given kubernetes
 // object as the base.
-func NewTemplateFromObjectFunction[T client.Object](fn func() T,
-	enabled bool, mutations ...TemplateMutationFunction) *Template[T] {
+func NewTemplateFromObjectFunction[T client.Object](fn func() T) *Template[T] {
 	return &Template[T]{
-		TemplateBuilder:   func(client.Object) (T, error) { return fn(), nil },
-		TemplateMutations: mutations,
-		IsEnabled:         enabled,
-		EnsureProperties:  []Property{},
-		IgnoreProperties:  []Property{},
+		TemplateBuilder: func(client.Object) (T, error) { return fn(), nil },
+		IsEnabled:       true,
 	}
 }
 
@@ -102,6 +94,30 @@ func (t *Template[T]) GetEnsureProperties() []Property {
 // GetIgnoreProperties returns the list of properties that should be ignored
 func (t *Template[T]) GetIgnoreProperties() []Property {
 	return t.IgnoreProperties
+}
+
+func (t *Template[T]) WithMutation(fn TemplateMutationFunction) *Template[T] {
+	if t.TemplateMutations == nil {
+		t.TemplateMutations = []TemplateMutationFunction{fn}
+	} else {
+		t.TemplateMutations = append(t.TemplateMutations, fn)
+	}
+	return t
+}
+
+func (t *Template[T]) WithEnabled(enabled bool) *Template[T] {
+	t.IsEnabled = enabled
+	return t
+}
+
+func (t *Template[T]) WithEnsureProperties(ensure []Property) *Template[T] {
+	t.EnsureProperties = ensure
+	return t
+}
+
+func (t *Template[T]) WithIgnoreProperties(ignore []Property) *Template[T] {
+	t.IgnoreProperties = ignore
+	return t
 }
 
 // Apply chains template functions to make them composable
