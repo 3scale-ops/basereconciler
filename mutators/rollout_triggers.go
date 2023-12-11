@@ -15,14 +15,51 @@ import (
 )
 
 // RolloutTrigger defines a configuration source that should trigger a
-// rollout whenever the data within that configuration source changes
+// rollout whenever the data within that configuration source changes.
+// Example usage:
+//
+//	 &resource.Template[*appsv1.Deployment]{
+//	 	TemplateBuilder: deployment(),
+//	 	IsEnabled:       true,
+//	 	TemplateMutations: []resource.TemplateMutationFunction{
+//	 		mutators.RolloutTrigger{Name: "secret", SecretName: pointer.String("secret")}.Add(),
+//	 	},
+//	 },
+
 type RolloutTrigger struct {
 	Name          string
 	ConfigMapName *string
 	SecretName    *string
 }
 
-// GetHash returns the hash of the data container in the RolloutTrigger
+// Add adds the trigger to the Deployment/StatefulSet
+func (trigger RolloutTrigger) Add(params ...string) resource.TemplateMutationFunction {
+	var domain string
+	if len(params) == 0 {
+		domain = config.GetAnnotationsDomain()
+	} else {
+		domain = params[0]
+	}
+	return func(ctx context.Context, cl client.Client, desired client.Object) error {
+
+		hash, err := trigger.GetHash(ctx, cl, desired.GetNamespace())
+		if err != nil {
+			return err
+		}
+		trigger := map[string]string{trigger.GetAnnotationKey(domain): hash}
+
+		switch o := desired.(type) {
+		case *appsv1.Deployment:
+			o.Spec.Template.ObjectMeta.Annotations = util.MergeMaps(map[string]string{}, o.Spec.Template.ObjectMeta.Annotations, trigger)
+		case *appsv1.StatefulSet:
+			o.Spec.Template.ObjectMeta.Annotations = util.MergeMaps(map[string]string{}, o.Spec.Template.ObjectMeta.Annotations, trigger)
+		}
+
+		return nil
+	}
+}
+
+// GetHash returns the hash of the data contained in the RolloutTrigger
 // config source
 func (rt RolloutTrigger) GetHash(ctx context.Context, cl client.Client, namespace string) (string, error) {
 
@@ -54,37 +91,10 @@ func (rt RolloutTrigger) GetHash(ctx context.Context, cl client.Client, namespac
 }
 
 // GetAnnotationKey returns the annotation key to be used in the Pods that read
-// from the config source defined in the RolloutTrigger
+// from the config source defined in the RolloutTrigger.
 func (rt RolloutTrigger) GetAnnotationKey(annotationsDomain string) string {
 	if rt.SecretName != nil {
 		return fmt.Sprintf("%s/%s.%s", string(annotationsDomain), rt.Name, "secret-hash")
 	}
 	return fmt.Sprintf("%s/%s.%s", string(annotationsDomain), rt.Name, "configmap-hash")
-}
-
-// Add adds the trigger to the Deployment/StatefulSet
-func (trigger RolloutTrigger) Add(params ...string) resource.TemplateMutationFunction {
-	var domain string
-	if len(params) == 0 {
-		domain = config.GetAnnotationsDomain()
-	} else {
-		domain = params[0]
-	}
-	return func(ctx context.Context, cl client.Client, desired client.Object) error {
-
-		hash, err := trigger.GetHash(ctx, cl, desired.GetNamespace())
-		if err != nil {
-			return err
-		}
-		trigger := map[string]string{trigger.GetAnnotationKey(domain): hash}
-
-		switch o := desired.(type) {
-		case *appsv1.Deployment:
-			o.Spec.Template.ObjectMeta.Annotations = util.MergeMaps(map[string]string{}, o.Spec.Template.ObjectMeta.Annotations, trigger)
-		case *appsv1.StatefulSet:
-			o.Spec.Template.ObjectMeta.Annotations = util.MergeMaps(map[string]string{}, o.Spec.Template.ObjectMeta.Annotations, trigger)
-		}
-
-		return nil
-	}
 }
