@@ -7,6 +7,7 @@ import (
 
 	"github.com/3scale-ops/basereconciler/config"
 	"github.com/3scale-ops/basereconciler/util"
+	"github.com/go-logr/logr"
 	"github.com/nsf/jsondiff"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/equality"
@@ -18,7 +19,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/apiutil"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
-	"sigs.k8s.io/controller-runtime/pkg/log"
 )
 
 // CreateOrUpdate cretes or updates resources. The function receives several paremters:
@@ -42,7 +42,7 @@ func CreateOrUpdate(ctx context.Context, cl client.Client, scheme *runtime.Schem
 	if err != nil {
 		return nil, err
 	}
-	logger := log.FromContext(ctx, "gvk", gvk, "resource", desired.GetName())
+	logger := logr.FromContextOrDiscard(ctx).WithValues("gvk", gvk, "resource", desired.GetName())
 
 	live, err := util.NewObjectFromGVK(gvk, scheme)
 	if err != nil {

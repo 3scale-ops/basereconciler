@@ -3,11 +3,11 @@ package reconciler
 import (
 	"context"
 
+	"github.com/go-logr/logr"
 	appsv1 "k8s.io/api/apps/v1"
 	"k8s.io/apimachinery/pkg/api/equality"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/log"
 )
 
 // ReconcileStatus can reconcile the status of a custom resource when the resource implements
@@ -17,7 +17,7 @@ import (
 // reconcile the status of the custom resource and return whether update is required or not.
 func (r *Reconciler) ReconcileStatus(ctx context.Context, instance ObjectWithAppStatus,
 	deployments, statefulsets []types.NamespacedName, mutators ...func() bool) error {
-	logger := log.FromContext(ctx)
+	logger := logr.FromContextOrDiscard(ctx)
 	update := false
 	status := instance.GetStatus()
 

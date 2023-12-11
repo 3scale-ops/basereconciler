@@ -9,16 +9,16 @@ import (
 
 	"github.com/3scale-ops/basereconciler/config"
 	"github.com/3scale-ops/basereconciler/util"
+	"github.com/go-logr/logr"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/apiutil"
-	"sigs.k8s.io/controller-runtime/pkg/log"
 )
 
 func (r *Reconciler) pruneOrphaned(ctx context.Context, owner client.Object, managed []corev1.ObjectReference) error {
-	logger := log.FromContext(ctx)
+	logger := logr.FromContextOrDiscard(ctx)
 
 	ownerGVK, err := apiutil.GVKForObject(owner, r.Scheme)
 	if err != nil {
