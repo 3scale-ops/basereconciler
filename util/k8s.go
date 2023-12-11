@@ -8,13 +8,8 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
-	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
-
-func ObjectKey(o client.Object) types.NamespacedName {
-	return types.NamespacedName{Name: o.GetName(), Namespace: o.GetNamespace()}
-}
 
 // this is an ugly function to retrieve the list of Items from a
 // client.ObjectList because the interface doesn't have a GetItems

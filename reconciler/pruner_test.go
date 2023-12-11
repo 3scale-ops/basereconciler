@@ -6,7 +6,6 @@ import (
 	"testing"
 
 	"github.com/3scale-ops/basereconciler/config"
-	"github.com/3scale-ops/basereconciler/util"
 	appsv1 "k8s.io/api/apps/v1"
 	autoscalingv2 "k8s.io/api/autoscaling/v2"
 	corev1 "k8s.io/api/core/v1"
@@ -177,7 +176,7 @@ func TestReconciler_pruneOrphaned(t *testing.T) {
 				return
 			}
 			for _, check := range tt.want {
-				err := tt.fields.Client.Get(tt.args.ctx, util.ObjectKey(check.obj), check.obj)
+				err := tt.fields.Client.Get(tt.args.ctx, client.ObjectKeyFromObject(check.obj), check.obj)
 				if (err != nil && errors.IsNotFound(err)) != check.absent {
 					t.Errorf("Reconciler.pruneOrphaned()  want %s to be absent=%v", check.obj.GetName(), check.absent)
 				}

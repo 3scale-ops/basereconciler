@@ -102,8 +102,7 @@ var _ = BeforeSuite(func() {
 
 	// Add controllers for testing
 	err = (&Reconciler{
-		Reconciler: *reconciler.NewFromManager(mgr).
-			WithLogger(ctrl.Log.WithName("controllers").WithName("Test")),
+		Reconciler: reconciler.NewFromManager(mgr).WithLogger(ctrl.Log.WithName("controllers").WithName("Test")),
 	}).SetupWithManager(mgr)
 	Expect(err).ToNot(HaveOccurred())
 

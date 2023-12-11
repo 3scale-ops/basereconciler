@@ -20,11 +20,25 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 )
 
+type ReconcileResult struct {
+	Requeue bool
+	Error   error
+}
+
+func (result ReconcileResult) IsReturnAndRequeue() bool {
+	return result.Requeue || result.Error != nil
+}
+
+func (result ReconcileResult) Values() (ctrl.Result, error) {
+	return ctrl.Result{Requeue: result.Requeue}, result.Error
+}
+
 // Reconciler computes a list of resources that it needs to keep in place
 type Reconciler struct {
 	client.Client
 	Log         logr.Logger
 	Scheme      *runtime.Scheme
+	gvk         schema.GroupVersionKind
 	typeTracker typeTracker
 }
 
@@ -33,23 +47,28 @@ func NewFromManager(mgr manager.Manager) *Reconciler {
 	return &Reconciler{Client: mgr.GetClient(), Scheme: mgr.GetScheme(), Log: logr.Discard()}
 }
 
+func (r *Reconciler) WithGVK(apiVersion, kind string) *Reconciler {
+	r.gvk = schema.FromAPIVersionAndKind(apiVersion, kind)
+	return r
+}
+
+// WithLogger sets the Reconciler logger
 func (r *Reconciler) WithLogger(logger logr.Logger) *Reconciler {
 	r.Log = logger
 	return r
 }
 
-func (r *Reconciler) GetLogger(ctx context.Context) logr.Logger {
-	if logger, err := logr.FromContext(ctx); err != nil {
-		return r.Log
+// Logger returns the Reconciler logger and a copy of the context that also includes the logger inside to pass it around easily.
+func (r *Reconciler) Logger(ctx context.Context, keysAndValues ...interface{}) (context.Context, logr.Logger) {
+	var logger logr.Logger
+	if !r.Log.IsZero() {
+		// get the logger configured in the Reconciler
+		logger = r.Log.WithValues(keysAndValues...)
 	} else {
-		return logger
+		// try to get a logger from the context
+		logger = logr.FromContextOrDiscard(ctx).WithValues(keysAndValues...)
 	}
-}
-
-func (r *Reconciler) SetLogger(ctx *context.Context, keysAndValues ...interface{}) logr.Logger {
-	logger := r.GetLogger(*ctx).WithValues(keysAndValues)
-	*ctx = logr.NewContext(*ctx, logger)
-	return logger
+	return logr.NewContext(ctx, logger), logger
 }
 
 // GetInstance tries to retrieve the custom resource instance and perform some standard
@@ -60,64 +79,60 @@ func (r *Reconciler) SetLogger(ctx *context.Context, keysAndValues ...interface{
 //   - cleanupFns: variadic parameter that allows passing cleanup functions that will be
 //     run when the custom resource is being deleted. Only works with a non-nil finalizer, otherwise
 //     the custom resource will be immediately deleted and the functions won't run.
-func (r *Reconciler) GetInstance(ctx context.Context, key types.NamespacedName,
-	instance client.Object, finalizer *string, cleanupFns ...func()) (*ctrl.Result, error) {
-	logger := logr.FromContextOrDiscard(ctx)
+func (r *Reconciler) GetInstance(ctx context.Context, req reconcile.Request, obj client.Object,
+	finalizer *string, cleanupFns ...func()) ReconcileResult {
 
-	err := r.Client.Get(ctx, key, instance)
+	ctx, logger := r.Logger(ctx)
+	err := r.Client.Get(ctx, types.NamespacedName{Name: req.Name, Namespace: req.Namespace}, obj)
 	if err != nil {
 		if errors.IsNotFound(err) {
 			// Return and don't requeue
-			return &ctrl.Result{}, nil
+			return ReconcileResult{Requeue: false, Error: nil}
 		}
-		return &ctrl.Result{}, err
+		return ReconcileResult{Requeue: false, Error: err}
 	}
 
-	if util.IsBeingDeleted(instance) {
+	if util.IsBeingDeleted(obj) {
 
 		// finalizer logic is only triggered if the controller
-		// sets a finalizer, otherwise there's notihng to be done
-		if finalizer != nil {
+		// sets a finalizer and the finalizer is still present in the
+		// resource
+		if finalizer != nil && controllerutil.ContainsFinalizer(obj, *finalizer) {
 
-			if !controllerutil.ContainsFinalizer(instance, *finalizer) {
-				return &ctrl.Result{}, nil
-			}
-			err := r.ManageCleanupLogic(instance, cleanupFns, logger)
+			err := r.ManageCleanupLogic(obj, cleanupFns, logger)
 			if err != nil {
 				logger.Error(err, "unable to delete instance")
-				result, err := ctrl.Result{}, err
-				return &result, err
+				return ReconcileResult{Requeue: false, Error: err}
 			}
-			controllerutil.RemoveFinalizer(instance, *finalizer)
-			err = r.Client.Update(ctx, instance)
+			controllerutil.RemoveFinalizer(obj, *finalizer)
+			err = r.Client.Update(ctx, obj)
 			if err != nil {
 				logger.Error(err, "unable to update instance")
-				result, err := ctrl.Result{}, err
-				return &result, err
+				return ReconcileResult{Requeue: false, Error: err}
 			}
 
 		}
-		return &ctrl.Result{}, nil
+		// no finalizer, just return without doing anything
+		return ReconcileResult{Requeue: false, Error: nil}
 	}
 
-	if ok := r.IsInitialized(instance, finalizer); !ok {
-		err := r.Client.Update(ctx, instance)
+	if ok := r.IsInitialized(obj, finalizer); !ok {
+		err := r.Client.Update(ctx, obj)
 		if err != nil {
 			logger.Error(err, "unable to initialize instance")
-			result, err := ctrl.Result{}, err
-			return &result, err
+			return ReconcileResult{Requeue: false, Error: err}
 		}
-		return &ctrl.Result{}, nil
+		return ReconcileResult{Requeue: true, Error: nil}
 	}
-	return nil, nil
+	return ReconcileResult{Requeue: false, Error: nil}
 }
 
 // IsInitialized can be used to check if instance is correctly initialized.
 // Returns false if it isn't.
-func (r *Reconciler) IsInitialized(instance client.Object, finalizer *string) bool {
+func (r *Reconciler) IsInitialized(obj client.Object, finalizer *string) bool {
 	ok := true
-	if finalizer != nil && !controllerutil.ContainsFinalizer(instance, *finalizer) {
-		controllerutil.AddFinalizer(instance, *finalizer)
+	if finalizer != nil && !controllerutil.ContainsFinalizer(obj, *finalizer) {
+		controllerutil.AddFinalizer(obj, *finalizer)
 		ok = false
 	}
 
@@ -125,7 +140,7 @@ func (r *Reconciler) IsInitialized(instance client.Object, finalizer *string) bo
 }
 
 // ManageCleanupLogic contains finalization logic for the Reconciler
-func (r *Reconciler) ManageCleanupLogic(instance client.Object, fns []func(), log logr.Logger) error {
+func (r *Reconciler) ManageCleanupLogic(obj client.Object, fns []func(), log logr.Logger) error {
 	// Call any cleanup functions passed
 	for _, fn := range fns {
 		fn()
@@ -143,13 +158,16 @@ func (r *Reconciler) ManageCleanupLogic(instance client.Object, fns []func(), lo
 //   - If the resource pruner is enabled any resource owned by the custom resource not present in the list of managed
 //     resources is deleted. The resource pruner must be enabled in the global config (see package config) and also not
 //     explicitely disabled in the resource by the '<annotations-domain>/prune: true/false' annotation.
-func (r *Reconciler) ReconcileOwnedResources(ctx context.Context, owner client.Object, list []resource.TemplateInterface) error {
+func (r *Reconciler) ReconcileOwnedResources(ctx context.Context, owner client.Object, list []resource.TemplateInterface) ReconcileResult {
 	managedResources := []corev1.ObjectReference{}
 
 	for _, template := range list {
 		ref, err := resource.CreateOrUpdate(ctx, r.Client, r.Scheme, owner, template)
 		if err != nil {
-			return fmt.Errorf("unable to CreateOrUpdate resource: %w", err)
+			return ReconcileResult{
+				Requeue: false,
+				Error:   fmt.Errorf("unable to CreateOrUpdate resource: %w", err),
+			}
 		}
 		if ref != nil {
 			managedResources = append(managedResources, *ref)
@@ -159,11 +177,15 @@ func (r *Reconciler) ReconcileOwnedResources(ctx context.Context, owner client.O
 
 	if isPrunerEnabled(owner) {
 		if err := r.pruneOrphaned(ctx, owner, managedResources); err != nil {
-			return fmt.Errorf("unable to prune orphaned resources: %w", err)
+
+			return ReconcileResult{
+				Requeue: false,
+				Error:   fmt.Errorf("unable to prune orphaned resources: %w", err),
+			}
 		}
 	}
 
-	return nil
+	return ReconcileResult{Requeue: false, Error: nil}
 }
 
 // SecretEventHandler returns an EventHandler for the specific client.ObjectList
@@ -186,7 +208,7 @@ func (r *Reconciler) SecretEventHandler(ol client.ObjectList, logger logr.Logger
 			// TODO: pass a function that can decide if the event is of interest for a given resource
 			req := make([]reconcile.Request, 0, len(items))
 			for _, item := range items {
-				req = append(req, reconcile.Request{NamespacedName: util.ObjectKey(item)})
+				req = append(req, reconcile.Request{NamespacedName: client.ObjectKeyFromObject(item)})
 			}
 			return req
 		},
