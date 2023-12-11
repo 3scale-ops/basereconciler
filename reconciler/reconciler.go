@@ -16,7 +16,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
-	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 )
@@ -24,13 +23,33 @@ import (
 // Reconciler computes a list of resources that it needs to keep in place
 type Reconciler struct {
 	client.Client
+	Log         logr.Logger
 	Scheme      *runtime.Scheme
 	typeTracker typeTracker
 }
 
 // NewFromManager returns a new Reconciler from a controller-runtime manager.Manager
-func NewFromManager(mgr manager.Manager) Reconciler {
-	return Reconciler{Client: mgr.GetClient(), Scheme: mgr.GetScheme()}
+func NewFromManager(mgr manager.Manager) *Reconciler {
+	return &Reconciler{Client: mgr.GetClient(), Scheme: mgr.GetScheme(), Log: logr.Discard()}
+}
+
+func (r *Reconciler) WithLogger(logger logr.Logger) *Reconciler {
+	r.Log = logger
+	return r
+}
+
+func (r *Reconciler) GetLogger(ctx context.Context) logr.Logger {
+	if logger, err := logr.FromContext(ctx); err != nil {
+		return r.Log
+	} else {
+		return logger
+	}
+}
+
+func (r *Reconciler) SetLogger(ctx *context.Context, keysAndValues ...interface{}) logr.Logger {
+	logger := r.GetLogger(*ctx).WithValues(keysAndValues)
+	*ctx = logr.NewContext(*ctx, logger)
+	return logger
 }
 
 // GetInstance tries to retrieve the custom resource instance and perform some standard
@@ -42,8 +61,8 @@ func NewFromManager(mgr manager.Manager) Reconciler {
 //     run when the custom resource is being deleted. Only works with a non-nil finalizer, otherwise
 //     the custom resource will be immediately deleted and the functions won't run.
 func (r *Reconciler) GetInstance(ctx context.Context, key types.NamespacedName,
-	instance client.Object, finalizer *string, cleanupFns []func()) (*ctrl.Result, error) {
-	logger := log.FromContext(ctx)
+	instance client.Object, finalizer *string, cleanupFns ...func()) (*ctrl.Result, error) {
+	logger := logr.FromContextOrDiscard(ctx)
 
 	err := r.Client.Get(ctx, key, instance)
 	if err != nil {

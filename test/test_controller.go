@@ -24,7 +24,6 @@ import (
 	"github.com/3scale-ops/basereconciler/resource"
 	"github.com/3scale-ops/basereconciler/test/api/v1alpha1"
 	"github.com/3scale-ops/basereconciler/util"
-	"github.com/go-logr/logr"
 	appsv1 "k8s.io/api/apps/v1"
 	autoscalingv2 "k8s.io/api/autoscaling/v2"
 	corev1 "k8s.io/api/core/v1"
@@ -43,7 +42,6 @@ import (
 // +kubebuilder:object:generate=false
 type Reconciler struct {
 	reconciler.Reconciler
-	Log logr.Logger
 }
 
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
