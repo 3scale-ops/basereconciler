@@ -78,7 +78,7 @@ func TestProperty_Reconcile(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := tt.p.Reconcile(tt.args.u_live, tt.args.u_desired, tt.args.u_normalizedLive, tt.args.logger)
+			err := tt.p.reconcile(tt.args.u_live, tt.args.u_desired, tt.args.u_normalizedLive, tt.args.logger)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("Property.Reconcile() error = %v, wantErr %v", err, tt.wantErr)
 				return
@@ -95,8 +95,8 @@ func TestProperty_Reconcile(t *testing.T) {
 
 func Test_delta(t *testing.T) {
 	g := gomega.NewWithT(t)
-	g.Expect(delta(0, 0)).To(gomega.Equal(MissingInBoth))
-	g.Expect(delta(0, 1)).To(gomega.Equal(MissingFromDesiredPresentInLive))
-	g.Expect(delta(1, 0)).To(gomega.Equal(PresentInDesiredMissingFromLive))
-	g.Expect(delta(1, 1)).To(gomega.Equal(PresentInBoth))
+	g.Expect(delta(0, 0)).To(gomega.Equal(missingInBoth))
+	g.Expect(delta(0, 1)).To(gomega.Equal(missingFromDesiredPresentInLive))
+	g.Expect(delta(1, 0)).To(gomega.Equal(presentInDesiredMissingFromLive))
+	g.Expect(delta(1, 1)).To(gomega.Equal(presentInBoth))
 }

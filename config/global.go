@@ -1,3 +1,6 @@
+// Package config provides global configuration for the basereconciler. The package
+// provides some barebones configuration, but in most cases the user will want to
+// tailor this configuration to the needs and requirements of the specific controller/s.
 package config
 
 import (
@@ -31,13 +34,34 @@ var config = struct {
 	},
 }
 
-func GetAnnotationsDomain() string       { return config.annotationsDomain }
+// GetAnnotationsDomain returns the globally configured annotations domain. The annotations
+// domain is used for the rollout trigger annotations (see the mutators package) and the resource
+// finalizers
+func GetAnnotationsDomain() string { return config.annotationsDomain }
+
+// SetAnnotationsDomain globally configures the annotations domain. The annotations
+// domain is used for the rollout trigger annotations (see the mutators package) and the resource
+// finalizers
 func SetAnnotationsDomain(domain string) { config.annotationsDomain = domain }
 
-func EnableResourcePruner()         { config.resourcePruner = true }
-func DisableResourcePruner()        { config.resourcePruner = false }
+// EnableResourcePruner enables the resource pruner. The resource pruner keeps track of
+// the owned resources of a given custom resource and deletes all that are not present in the list
+// of managed resoures to reconcile.
+func EnableResourcePruner() { config.resourcePruner = true }
+
+// DisableResourcePruner disables the resource pruner. The resource pruner keeps track of
+// the owned resources of a given custom resource and deletes all that are not present in the list
+// of managed resoures to reconcile.
+func DisableResourcePruner() { config.resourcePruner = false }
+
+// IsResourcePrunerEnabled returs a boolean indicating wheter the resource pruner is enabled or not.
 func IsResourcePrunerEnabled() bool { return config.resourcePruner }
 
+// GetDefaultReconcileConfigForGVK returns the default configuration that instructs basereconciler how to reconcile
+// a given kubernetes GVK (GroupVersionKind). This default config will be used if the "resource.Template" object (see
+// the resource package) does not specify a configuration itself.
+// When the passed GVK does not match any of the configured, this function returns the "wildcard", which is a default
+// set of basic reconclie rules that the reconciler will try to use when no other configuration is available.
 func GetDefaultReconcileConfigForGVK(gvk schema.GroupVersionKind) (ReconcileConfigForGVK, error) {
 	if cfg, ok := config.defaultResourceReconcileConfig[gvk.String()]; ok {
 		return cfg, nil
@@ -47,6 +71,12 @@ func GetDefaultReconcileConfigForGVK(gvk schema.GroupVersionKind) (ReconcileConf
 		return ReconcileConfigForGVK{}, fmt.Errorf("no config registered for gvk %s", gvk)
 	}
 }
+
+// SetDefaultReconcileConfigForGVK sets the default configuration that instructs basereconciler how to reconcile
+// a given kubernetes GVK (GroupVersionKind). This default config will be used if the "resource.Template" object (see
+// the resource package) does not specify a configuration itself.
+// If the passed GVK is an empty one ("schema.GroupVersionKind{}"), the function will set the wildcard instead, which
+// is a default set of basic reconclie rules that the reconciler will try to use when no other configuration is available.
 func SetDefaultReconcileConfigForGVK(gvk schema.GroupVersionKind, cfg ReconcileConfigForGVK) {
 	if reflect.DeepEqual(gvk, schema.GroupVersionKind{}) {
 		config.defaultResourceReconcileConfig["*"] = cfg

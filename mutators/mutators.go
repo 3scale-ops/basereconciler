@@ -12,7 +12,20 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-// reconcileDeploymentReplicas reconciles the number of replicas of a Deployment
+// SetDeploymentReplicas reconciles the number of replicas of a Deployment. If "enforce"
+// is set to true, the value in the template is enforce, overwritting the live value. If
+// the "enforce" is set to false, the live value obtained from the Kubernetes API is used.
+// In general, if the Deployment uses HorizontalPodAutoscaler or any other controller modifies
+// the number of replicas, enforce needs to be "false".
+// Example usage:
+//
+//	&resource.Template[*appsv1.Deployment]{
+//		TemplateBuilder: deployment(),
+//		IsEnabled:       true,
+//		TemplateMutations: []resource.TemplateMutationFunction{
+//			mutators.SetDeploymentReplicas(!hpaExists()),
+//		},
+//	},
 func SetDeploymentReplicas(enforce bool) resource.TemplateMutationFunction {
 	return func(ctx context.Context, cl client.Client, desired client.Object) error {
 		if enforce {
@@ -36,6 +49,23 @@ func SetDeploymentReplicas(enforce bool) resource.TemplateMutationFunction {
 	}
 }
 
+// SetServiceLiveValues retrieves some live values of the Service spec from the Kubernetes
+// API to avoid overwriting them. These values are typically set the by the kube-controller-manager
+// (in some rare occasions the user might explicitely set them) and should not be modified by the
+// reconciler. The fields that this function keeps in sync with the live state are:
+//   - spec.clusterIP
+//   - spec.ClisterIPs
+//   - spec.pors[*].nodePort (when the Service type is not ClusterIP)
+//
+// Example usage:
+//
+//	&resource.Template[*corev1.Service]{
+//		TemplateBuilder: service(req.Namespace, instance.Spec.ServiceAnnotations),
+//		IsEnabled:       true,
+//		TemplateMutations: []resource.TemplateMutationFunction{
+//			mutators.SetServiceLiveValues(),
+//		},
+//	}
 func SetServiceLiveValues() resource.TemplateMutationFunction {
 	return func(ctx context.Context, cl client.Client, desired client.Object) error {
 
@@ -67,6 +97,7 @@ func SetServiceLiveValues() resource.TemplateMutationFunction {
 	}
 }
 
+// findPort returns the Service port identified by port/protocol
 func findPort(pNumber int32, pProtocol corev1.Protocol, ports []corev1.ServicePort) *corev1.ServicePort {
 	// Ports within a svc are uniquely identified by
 	// the "port" and "protocol" fields. This is documented in

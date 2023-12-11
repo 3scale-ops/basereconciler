@@ -21,7 +21,14 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log"
 )
 
-// CreateOrUpdate cretes or updates resources
+// CreateOrUpdate cretes or updates resources. The function receives several paremters:
+//   - ctx: the context
+//   - cl: the kubernetes API client
+//   - scheme: the kubernetes API scheme
+//   - owner: the object that owns the resource. Used to set the OwnerReference in the resource
+//   - template: the struct that describes how the resource needs to be reconciled. It must implement
+//     the TemplateInterface interface. When template.GetEnsureProperties is not set or an empty list, this
+//     function will lookup for configuration in the global configuration (see pacakge config).
 func CreateOrUpdate(ctx context.Context, cl client.Client, scheme *runtime.Scheme,
 	owner client.Object, template TemplateInterface) (*corev1.ObjectReference, error) {
 
@@ -106,7 +113,7 @@ func CreateOrUpdate(ctx context.Context, cl client.Client, scheme *runtime.Schem
 
 	// reconcile properties
 	for _, property := range ensure {
-		if err := property.Reconcile(u_live, u_desired, u_normalizedLive, logger); err != nil {
+		if err := property.reconcile(u_live, u_desired, u_normalizedLive, logger); err != nil {
 			return nil, wrapError(fmt.Sprintf("unable to reconcile property %s", property), key, gvk, err)
 		}
 	}
@@ -114,7 +121,7 @@ func CreateOrUpdate(ctx context.Context, cl client.Client, scheme *runtime.Schem
 	// ignore properties
 	for _, property := range ignore {
 		for _, m := range []map[string]any{u_live, u_desired, u_normalizedLive} {
-			if err := property.Ignore(m); err != nil {
+			if err := property.ignore(m); err != nil {
 				return nil, wrapError(fmt.Sprintf("unable to ignore property %s", property), key, gvk, err)
 			}
 		}

@@ -6,6 +6,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
+// TemplateInterface represents a template that can has methods that instruct how a certain
+// resource needs to be progressed to match its desired state.
 type TemplateInterface interface {
 	Build(ctx context.Context, cl client.Client, o client.Object) (client.Object, error)
 	Enabled() bool
@@ -14,30 +16,29 @@ type TemplateInterface interface {
 }
 
 // TemplateBuilderFunction is a function that returns a k8s API object (client.Object) when
-// called. TemplateBuilderFunction has no access to cluster live info
+// called. TemplateBuilderFunction has no access to cluster live info.
+// A TemplateBuilderFunction is used to return the basic shape of a resource (a template) that can
+// then be further modified before it's compared with it's live state and reconciled.
 type TemplateBuilderFunction[T client.Object] func(client.Object) (T, error)
 
-// func NewBuilderFunctionFromObject[T client.Object](o T) TemplateBuilderFunction[T] {
-// 	return func(client.Object) (T, error) {
-// 		return o, nil
-// 	}
-// }
-
 // TemplateMutationFunction represents mutation functions that require an API client, generally
-// because they need to retrieve live cluster information to mutate the object
+// because they need to retrieve live cluster information to mutate the object.
+// A TemplateMutationFunction is typically used to modify a template using live values obtained from
+// a kubernetes API server.
 type TemplateMutationFunction func(context.Context, client.Client, client.Object) error
 
+// Template implements TemplateInterface.
 type Template[T client.Object] struct {
 	// TemplateBuilder is the function that is used as the basic
-	// tempalte for the object. It is called by Build() to create the
+	// template for the object. It is called by Build() to create the
 	// object.
 	TemplateBuilder TemplateBuilderFunction[T]
 	// TemplateMutations are functions that are called during Build() after
 	// TemplateBuilder has ben invoked, to perform mutations on the object that require
-	// access to an API client.
+	// access to a kubernetes API server.
 	TemplateMutations []TemplateMutationFunction
-	// IsEnabled specifies whether the resourse describe by this Template should
-	// exists or not
+	// IsEnabled specifies whether the resourse described by this Template should
+	// exist or not.
 	IsEnabled bool
 	// EnsureProperties are the properties from the desired object that should be enforced
 	// to the live object. The syntax is jsonpath.
@@ -48,6 +49,7 @@ type Template[T client.Object] struct {
 	IgnoreProperties []Property
 }
 
+// NewTemplate returns a new Template struct using the passed parameters
 func NewTemplate[T client.Object](tb TemplateBuilderFunction[T],
 	enabled bool, mutations ...TemplateMutationFunction) *Template[T] {
 	return &Template[T]{
@@ -59,6 +61,8 @@ func NewTemplate[T client.Object](tb TemplateBuilderFunction[T],
 	}
 }
 
+// NewTemplateFromObjectFunction returns a new Template using the given kubernetes
+// object as the base.
 func NewTemplateFromObjectFunction[T client.Object](fn func() T,
 	enabled bool, mutations ...TemplateMutationFunction) *Template[T] {
 	return &Template[T]{
@@ -70,7 +74,8 @@ func NewTemplateFromObjectFunction[T client.Object](fn func() T,
 	}
 }
 
-// Build returns a T resource by executing its template function
+// Build returns a T resource. It first executes the TemplateBuilder function and then each of the
+// TemplateMutationFunction functions specified by the TemplateMutations field.
 func (t *Template[T]) Build(ctx context.Context, cl client.Client, o client.Object) (client.Object, error) {
 	o, err := t.TemplateBuilder(o)
 	if err != nil {
@@ -112,8 +117,4 @@ func (t *Template[T]) Apply(mutation TemplateBuilderFunction[T]) *Template[T] {
 	}
 
 	return t
-}
-
-func (t *Template[T]) Chain(mutation TemplateBuilderFunction[T]) *Template[T] {
-	return t.Apply(mutation)
 }

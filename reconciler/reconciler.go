@@ -28,12 +28,19 @@ type Reconciler struct {
 	typeTracker typeTracker
 }
 
+// NewFromManager returns a new Reconciler from a controller-runtime manager.Manager
 func NewFromManager(mgr manager.Manager) Reconciler {
 	return Reconciler{Client: mgr.GetClient(), Scheme: mgr.GetScheme()}
 }
 
 // GetInstance tries to retrieve the custom resource instance and perform some standard
-// tasks like initialization and cleanup when required.
+// tasks like initialization and cleanup. The behaviour can be modified depending on the
+// parameters passed to the function:
+//   - finalizer: if a non-nil finalizer is passed to the function, it will ensure that the
+//     custom resource has a finalizer in place, updasting it if required.
+//   - cleanupFns: variadic parameter that allows passing cleanup functions that will be
+//     run when the custom resource is being deleted. Only works with a non-nil finalizer, otherwise
+//     the custom resource will be immediately deleted and the functions won't run.
 func (r *Reconciler) GetInstance(ctx context.Context, key types.NamespacedName,
 	instance client.Object, finalizer *string, cleanupFns []func()) (*ctrl.Result, error) {
 	logger := log.FromContext(ctx)
@@ -98,8 +105,7 @@ func (r *Reconciler) IsInitialized(instance client.Object, finalizer *string) bo
 	return ok
 }
 
-// ManageCleanupLogic contains finalization logic for the LockedResourcesReconciler
-// Functionality can be extended by passing extra cleanup functions
+// ManageCleanupLogic contains finalization logic for the Reconciler
 func (r *Reconciler) ManageCleanupLogic(instance client.Object, fns []func(), log logr.Logger) error {
 	// Call any cleanup functions passed
 	for _, fn := range fns {
@@ -108,8 +114,16 @@ func (r *Reconciler) ManageCleanupLogic(instance client.Object, fns []func(), lo
 	return nil
 }
 
-// ReconcileOwnedResources handles generalized resource reconcile logic for
-// all controllers
+// ReconcileOwnedResources handles generalized resource reconcile logic for a controller:
+//
+//   - Takes a list of templates and calls resource.CreateOrUpdate on each one of them. The templates
+//     need to implement the resource.TemplateInterface interface. Users can take advantage of the generic
+//     resource.Template[T] struct that the resource package provides, which already implements the
+//     resource.TemplateInterface.
+//   - Each template is added to the list of managed resources if resource.CreateOrUpdate returns with no error
+//   - If the resource pruner is enabled any resource owned by the custom resource not present in the list of managed
+//     resources is deleted. The resource pruner must be enabled in the global config (see package config) and also not
+//     explicitely disabled in the resource by the '<annotations-domain>/prune: true/false' annotation.
 func (r *Reconciler) ReconcileOwnedResources(ctx context.Context, owner client.Object, list []resource.TemplateInterface) error {
 	managedResources := []corev1.ObjectReference{}
 
@@ -135,6 +149,7 @@ func (r *Reconciler) ReconcileOwnedResources(ctx context.Context, owner client.O
 
 // SecretEventHandler returns an EventHandler for the specific client.ObjectList
 // list object passed as parameter
+// TODO: generalize this to watch any object type
 func (r *Reconciler) SecretEventHandler(ol client.ObjectList, logger logr.Logger) handler.EventHandler {
 	return handler.EnqueueRequestsFromMapFunc(
 		func(o client.Object) []reconcile.Request {
