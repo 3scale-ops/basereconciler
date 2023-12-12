@@ -3,6 +3,7 @@ package reconciler
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/3scale-ops/basereconciler/resource"
 	"github.com/3scale-ops/basereconciler/util"
@@ -20,17 +21,22 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 )
 
-type ReconcileResult struct {
-	Requeue bool
-	Error   error
+type Result struct {
+	Requeue      bool
+	RequeueAfter time.Duration
+	Error        error
 }
 
-func (result ReconcileResult) IsReturnAndRequeue() bool {
+func (result Result) IsReturnAndRequeue() bool {
 	return result.Requeue || result.Error != nil
 }
 
-func (result ReconcileResult) Values() (ctrl.Result, error) {
-	return ctrl.Result{Requeue: result.Requeue}, result.Error
+func (result Result) Values() (ctrl.Result, error) {
+	return ctrl.Result{
+			Requeue:      result.Requeue,
+			RequeueAfter: result.RequeueAfter,
+		},
+		result.Error
 }
 
 // Reconciler computes a list of resources that it needs to keep in place
@@ -80,16 +86,16 @@ func (r *Reconciler) Logger(ctx context.Context, keysAndValues ...interface{}) (
 //     run when the custom resource is being deleted. Only works with a non-nil finalizer, otherwise
 //     the custom resource will be immediately deleted and the functions won't run.
 func (r *Reconciler) GetInstance(ctx context.Context, req reconcile.Request, obj client.Object,
-	finalizer *string, cleanupFns ...func()) ReconcileResult {
+	finalizer *string, cleanupFns ...func()) Result {
 
 	ctx, logger := r.Logger(ctx)
 	err := r.Client.Get(ctx, types.NamespacedName{Name: req.Name, Namespace: req.Namespace}, obj)
 	if err != nil {
 		if errors.IsNotFound(err) {
 			// Return and don't requeue
-			return ReconcileResult{Requeue: false, Error: nil}
+			return Result{Requeue: false, Error: nil}
 		}
-		return ReconcileResult{Requeue: false, Error: err}
+		return Result{Requeue: false, Error: err}
 	}
 
 	if util.IsBeingDeleted(obj) {
@@ -102,29 +108,29 @@ func (r *Reconciler) GetInstance(ctx context.Context, req reconcile.Request, obj
 			err := r.ManageCleanupLogic(obj, cleanupFns, logger)
 			if err != nil {
 				logger.Error(err, "unable to delete instance")
-				return ReconcileResult{Requeue: false, Error: err}
+				return Result{Requeue: false, Error: err}
 			}
 			controllerutil.RemoveFinalizer(obj, *finalizer)
 			err = r.Client.Update(ctx, obj)
 			if err != nil {
 				logger.Error(err, "unable to update instance")
-				return ReconcileResult{Requeue: false, Error: err}
+				return Result{Requeue: false, Error: err}
 			}
 
 		}
 		// no finalizer, just return without doing anything
-		return ReconcileResult{Requeue: false, Error: nil}
+		return Result{Requeue: false, Error: nil}
 	}
 
 	if ok := r.IsInitialized(obj, finalizer); !ok {
 		err := r.Client.Update(ctx, obj)
 		if err != nil {
 			logger.Error(err, "unable to initialize instance")
-			return ReconcileResult{Requeue: false, Error: err}
+			return Result{Requeue: false, Error: err}
 		}
-		return ReconcileResult{Requeue: true, Error: nil}
+		return Result{Requeue: true, Error: nil}
 	}
-	return ReconcileResult{Requeue: false, Error: nil}
+	return Result{Requeue: false, Error: nil}
 }
 
 // IsInitialized can be used to check if instance is correctly initialized.
@@ -158,13 +164,13 @@ func (r *Reconciler) ManageCleanupLogic(obj client.Object, fns []func(), log log
 //   - If the resource pruner is enabled any resource owned by the custom resource not present in the list of managed
 //     resources is deleted. The resource pruner must be enabled in the global config (see package config) and also not
 //     explicitely disabled in the resource by the '<annotations-domain>/prune: true/false' annotation.
-func (r *Reconciler) ReconcileOwnedResources(ctx context.Context, owner client.Object, list []resource.TemplateInterface) ReconcileResult {
+func (r *Reconciler) ReconcileOwnedResources(ctx context.Context, owner client.Object, list []resource.TemplateInterface) Result {
 	managedResources := []corev1.ObjectReference{}
 
 	for _, template := range list {
 		ref, err := resource.CreateOrUpdate(ctx, r.Client, r.Scheme, owner, template)
 		if err != nil {
-			return ReconcileResult{
+			return Result{
 				Requeue: false,
 				Error:   fmt.Errorf("unable to CreateOrUpdate resource: %w", err),
 			}
@@ -178,14 +184,14 @@ func (r *Reconciler) ReconcileOwnedResources(ctx context.Context, owner client.O
 	if isPrunerEnabled(owner) {
 		if err := r.pruneOrphaned(ctx, owner, managedResources); err != nil {
 
-			return ReconcileResult{
+			return Result{
 				Requeue: false,
 				Error:   fmt.Errorf("unable to prune orphaned resources: %w", err),
 			}
 		}
 	}
 
-	return ReconcileResult{Requeue: false, Error: nil}
+	return Result{Requeue: false, Error: nil}
 }
 
 // SecretEventHandler returns an EventHandler for the specific client.ObjectList

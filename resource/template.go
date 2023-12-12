@@ -53,7 +53,8 @@ type Template[T client.Object] struct {
 func NewTemplate[T client.Object](tb TemplateBuilderFunction[T]) *Template[T] {
 	return &Template[T]{
 		TemplateBuilder: tb,
-		IsEnabled:       true,
+		// default to true
+		IsEnabled: true,
 	}
 }
 
@@ -62,7 +63,8 @@ func NewTemplate[T client.Object](tb TemplateBuilderFunction[T]) *Template[T] {
 func NewTemplateFromObjectFunction[T client.Object](fn func() T) *Template[T] {
 	return &Template[T]{
 		TemplateBuilder: func(client.Object) (T, error) { return fn(), nil },
-		IsEnabled:       true,
+		// default to true
+		IsEnabled: true,
 	}
 }
 
@@ -101,6 +103,13 @@ func (t *Template[T]) WithMutation(fn TemplateMutationFunction) *Template[T] {
 		t.TemplateMutations = []TemplateMutationFunction{fn}
 	} else {
 		t.TemplateMutations = append(t.TemplateMutations, fn)
+	}
+	return t
+}
+
+func (t *Template[T]) WithMutations(fns []TemplateMutationFunction) *Template[T] {
+	for _, fn := range fns {
+		t.WithMutation(fn)
 	}
 	return t
 }

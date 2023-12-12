@@ -16,7 +16,7 @@ import (
 // status of the custom resource. It also accepts functions with signature "func() bool" that can
 // reconcile the status of the custom resource and return whether update is required or not.
 func (r *Reconciler) ReconcileStatus(ctx context.Context, instance ObjectWithAppStatus,
-	deployments, statefulsets []types.NamespacedName, mutators ...func() bool) ReconcileResult {
+	deployments, statefulsets []types.NamespacedName, mutators ...func() bool) Result {
 	logger := logr.FromContextOrDiscard(ctx)
 	update := false
 	status := instance.GetStatus()
@@ -27,7 +27,7 @@ func (r *Reconciler) ReconcileStatus(ctx context.Context, instance ObjectWithApp
 		deployment := &appsv1.Deployment{}
 		deploymentStatus := status.GetDeploymentStatus(key)
 		if err := r.Client.Get(ctx, key, deployment); err != nil {
-			return ReconcileResult{Requeue: false, Error: err}
+			return Result{Requeue: false, Error: err}
 		}
 
 		if !equality.Semantic.DeepEqual(deploymentStatus, deployment.Status) {
@@ -42,7 +42,7 @@ func (r *Reconciler) ReconcileStatus(ctx context.Context, instance ObjectWithApp
 		sts := &appsv1.StatefulSet{}
 		stsStatus := status.GetStatefulSetStatus(key)
 		if err := r.Client.Get(ctx, key, sts); err != nil {
-			return ReconcileResult{Requeue: false, Error: err}
+			return Result{Requeue: false, Error: err}
 		}
 
 		if !equality.Semantic.DeepEqual(stsStatus, sts.Status) {
@@ -63,11 +63,11 @@ func (r *Reconciler) ReconcileStatus(ctx context.Context, instance ObjectWithApp
 	if update {
 		if err := r.Client.Status().Update(ctx, instance); err != nil {
 			logger.Error(err, "unable to update status")
-			return ReconcileResult{Requeue: false, Error: err}
+			return Result{Requeue: false, Error: err}
 		}
 	}
 
-	return ReconcileResult{Requeue: false, Error: nil}
+	return Result{Requeue: false, Error: nil}
 }
 
 // ObjectWithAppStatus is an interface that implements
