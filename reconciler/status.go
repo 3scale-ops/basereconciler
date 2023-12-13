@@ -27,7 +27,7 @@ func (r *Reconciler) ReconcileStatus(ctx context.Context, instance ObjectWithApp
 		deployment := &appsv1.Deployment{}
 		deploymentStatus := status.GetDeploymentStatus(key)
 		if err := r.Client.Get(ctx, key, deployment); err != nil {
-			return Result{Requeue: false, Error: err}
+			return Result{Error: err}
 		}
 
 		if !equality.Semantic.DeepEqual(deploymentStatus, deployment.Status) {
@@ -42,7 +42,7 @@ func (r *Reconciler) ReconcileStatus(ctx context.Context, instance ObjectWithApp
 		sts := &appsv1.StatefulSet{}
 		stsStatus := status.GetStatefulSetStatus(key)
 		if err := r.Client.Get(ctx, key, sts); err != nil {
-			return Result{Requeue: false, Error: err}
+			return Result{Error: err}
 		}
 
 		if !equality.Semantic.DeepEqual(stsStatus, sts.Status) {
@@ -63,11 +63,11 @@ func (r *Reconciler) ReconcileStatus(ctx context.Context, instance ObjectWithApp
 	if update {
 		if err := r.Client.Status().Update(ctx, instance); err != nil {
 			logger.Error(err, "unable to update status")
-			return Result{Requeue: false, Error: err}
+			return Result{Error: err}
 		}
 	}
 
-	return Result{Requeue: false, Error: nil}
+	return Result{Action: ContinueAction}
 }
 
 // ObjectWithAppStatus is an interface that implements

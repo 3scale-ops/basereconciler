@@ -21,19 +21,28 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 )
 
+type action int
+
+const (
+	ContinueAction         action = 0
+	ReturnAction           action = 1
+	ReturnAndRequeueAction action = 2
+)
+
 type Result struct {
-	Requeue      bool
+	Action       action
 	RequeueAfter time.Duration
 	Error        error
 }
 
-func (result Result) IsReturnAndRequeue() bool {
-	return result.Requeue || result.Error != nil
+func (result Result) ShouldReturn() bool {
+	return result.Action == ReturnAction || result.Action == ReturnAndRequeueAction || result.Error != nil
 }
 
 func (result Result) Values() (ctrl.Result, error) {
+
 	return ctrl.Result{
-			Requeue:      result.Requeue,
+			Requeue:      func() bool { return result.Action == ReturnAndRequeueAction }(),
 			RequeueAfter: result.RequeueAfter,
 		},
 		result.Error
@@ -93,9 +102,9 @@ func (r *Reconciler) GetInstance(ctx context.Context, req reconcile.Request, obj
 	if err != nil {
 		if errors.IsNotFound(err) {
 			// Return and don't requeue
-			return Result{Requeue: false, Error: nil}
+			return Result{Action: ReturnAction}
 		}
-		return Result{Requeue: false, Error: err}
+		return Result{Error: err}
 	}
 
 	if util.IsBeingDeleted(obj) {
@@ -108,29 +117,29 @@ func (r *Reconciler) GetInstance(ctx context.Context, req reconcile.Request, obj
 			err := r.ManageCleanupLogic(obj, cleanupFns, logger)
 			if err != nil {
 				logger.Error(err, "unable to delete instance")
-				return Result{Requeue: false, Error: err}
+				return Result{Error: err}
 			}
 			controllerutil.RemoveFinalizer(obj, *finalizer)
 			err = r.Client.Update(ctx, obj)
 			if err != nil {
 				logger.Error(err, "unable to update instance")
-				return Result{Requeue: false, Error: err}
+				return Result{Error: err}
 			}
 
 		}
 		// no finalizer, just return without doing anything
-		return Result{Requeue: false, Error: nil}
+		return Result{Error: nil}
 	}
 
 	if ok := r.IsInitialized(obj, finalizer); !ok {
 		err := r.Client.Update(ctx, obj)
 		if err != nil {
 			logger.Error(err, "unable to initialize instance")
-			return Result{Requeue: false, Error: err}
+			return Result{Error: err}
 		}
-		return Result{Requeue: true, Error: nil}
+		return Result{Action: ReturnAndRequeueAction}
 	}
-	return Result{Requeue: false, Error: nil}
+	return Result{Action: ContinueAction}
 }
 
 // IsInitialized can be used to check if instance is correctly initialized.
@@ -170,10 +179,7 @@ func (r *Reconciler) ReconcileOwnedResources(ctx context.Context, owner client.O
 	for _, template := range list {
 		ref, err := resource.CreateOrUpdate(ctx, r.Client, r.Scheme, owner, template)
 		if err != nil {
-			return Result{
-				Requeue: false,
-				Error:   fmt.Errorf("unable to CreateOrUpdate resource: %w", err),
-			}
+			return Result{Error: fmt.Errorf("unable to CreateOrUpdate resource: %w", err)}
 		}
 		if ref != nil {
 			managedResources = append(managedResources, *ref)
@@ -184,14 +190,11 @@ func (r *Reconciler) ReconcileOwnedResources(ctx context.Context, owner client.O
 	if isPrunerEnabled(owner) {
 		if err := r.pruneOrphaned(ctx, owner, managedResources); err != nil {
 
-			return Result{
-				Requeue: false,
-				Error:   fmt.Errorf("unable to prune orphaned resources: %w", err),
-			}
+			return Result{Error: fmt.Errorf("unable to prune orphaned resources: %w", err)}
 		}
 	}
 
-	return Result{Requeue: false, Error: nil}
+	return Result{Action: ContinueAction}
 }
 
 // SecretEventHandler returns an EventHandler for the specific client.ObjectList

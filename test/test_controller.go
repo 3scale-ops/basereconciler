@@ -50,7 +50,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 	ctx, _ = r.Logger(ctx, "name", req.Name, "namespace", req.Namespace)
 	obj := &v1alpha1.Test{}
 	result := r.GetInstance(ctx, req, obj, nil, nil)
-	if result.IsReturnAndRequeue() {
+	if result.ShouldReturn() {
 		return result.Values()
 	}
 
@@ -131,14 +131,14 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 	}
 
 	result = r.ReconcileOwnedResources(ctx, obj, resources)
-	if result.IsReturnAndRequeue() {
+	if result.ShouldReturn() {
 		return result.Values()
 	}
 
 	// reconcile the status
 	result = r.ReconcileStatus(ctx, obj,
 		[]types.NamespacedName{{Name: "deployment", Namespace: obj.GetNamespace()}}, nil)
-	if result.IsReturnAndRequeue() {
+	if result.ShouldReturn() {
 		return result.Values()
 	}
 
