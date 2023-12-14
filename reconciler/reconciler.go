@@ -48,6 +48,39 @@ func (result Result) Values() (ctrl.Result, error) {
 		result.Error
 }
 
+var options = struct {
+	finalizer         *string
+	finalizationLogic []finalizationFunction
+}{
+	finalizer:         nil,
+	finalizationLogic: []finalizationFunction{},
+}
+
+// LifecycleOption is an interface that defines options that can be passed to
+// the reconciler's ManageResourceLifecycle() function
+type LifecycleOption interface {
+	applyToLifecycleOptions()
+}
+
+type finalizer string
+
+func (f finalizer) applyToLifecycleOptions() {
+	options.finalizer = util.Pointer(string(f))
+}
+func WithFinalizer(f string) finalizer {
+	return finalizer(f)
+}
+
+type finalizationFunction func(context.Context, client.Client) error
+
+func (fn finalizationFunction) applyToLifecycleOptions() {
+	options.finalizationLogic = append(options.finalizationLogic, fn)
+}
+
+func WithFinalizationFunc(fn func(context.Context, client.Client) error) finalizationFunction {
+	return fn
+}
+
 // Reconciler computes a list of resources that it needs to keep in place
 type Reconciler struct {
 	client.Client
@@ -86,16 +119,20 @@ func (r *Reconciler) Logger(ctx context.Context, keysAndValues ...interface{}) (
 	return logr.NewContext(ctx, logger), logger
 }
 
-// GetInstance tries to retrieve the custom resource instance and perform some standard
-// tasks like initialization and cleanup. The behaviour can be modified depending on the
-// parameters passed to the function:
+// ManageResourceLifecycle manages the lifecycle of the resource, from initialization to
+// finalization and deletion.
+// The behaviour can be modified depending on the options passed to the function:
 //   - finalizer: if a non-nil finalizer is passed to the function, it will ensure that the
 //     custom resource has a finalizer in place, updasting it if required.
 //   - cleanupFns: variadic parameter that allows passing cleanup functions that will be
 //     run when the custom resource is being deleted. Only works with a non-nil finalizer, otherwise
 //     the custom resource will be immediately deleted and the functions won't run.
-func (r *Reconciler) GetInstance(ctx context.Context, req reconcile.Request, obj client.Object,
-	finalizer *string, cleanupFns ...func()) Result {
+func (r *Reconciler) ManageResourceLifecycle(ctx context.Context, req reconcile.Request, obj client.Object,
+	opts ...LifecycleOption) Result {
+
+	for _, o := range opts {
+		o.applyToLifecycleOptions()
+	}
 
 	ctx, logger := r.Logger(ctx)
 	err := r.Client.Get(ctx, types.NamespacedName{Name: req.Name, Namespace: req.Namespace}, obj)
@@ -112,14 +149,14 @@ func (r *Reconciler) GetInstance(ctx context.Context, req reconcile.Request, obj
 		// finalizer logic is only triggered if the controller
 		// sets a finalizer and the finalizer is still present in the
 		// resource
-		if finalizer != nil && controllerutil.ContainsFinalizer(obj, *finalizer) {
+		if options.finalizer != nil && controllerutil.ContainsFinalizer(obj, *options.finalizer) {
 
-			err := r.ManageCleanupLogic(obj, cleanupFns, logger)
+			err := r.Finalize(ctx, options.finalizationLogic, logger)
 			if err != nil {
 				logger.Error(err, "unable to delete instance")
 				return Result{Error: err}
 			}
-			controllerutil.RemoveFinalizer(obj, *finalizer)
+			controllerutil.RemoveFinalizer(obj, *options.finalizer)
 			err = r.Client.Update(ctx, obj)
 			if err != nil {
 				logger.Error(err, "unable to update instance")
@@ -132,7 +169,7 @@ func (r *Reconciler) GetInstance(ctx context.Context, req reconcile.Request, obj
 		return Result{Action: ReturnAction}
 	}
 
-	if ok := r.IsInitialized(obj, finalizer); !ok {
+	if ok := r.IsInitialized(obj, options.finalizer); !ok {
 		err := r.Client.Update(ctx, obj)
 		if err != nil {
 			logger.Error(err, "unable to initialize instance")
@@ -155,11 +192,14 @@ func (r *Reconciler) IsInitialized(obj client.Object, finalizer *string) bool {
 	return ok
 }
 
-// ManageCleanupLogic contains finalization logic for the Reconciler
-func (r *Reconciler) ManageCleanupLogic(obj client.Object, fns []func(), log logr.Logger) error {
+// Finalize contains finalization logic for the Reconciler
+func (r *Reconciler) Finalize(ctx context.Context, fns []finalizationFunction, log logr.Logger) error {
 	// Call any cleanup functions passed
 	for _, fn := range fns {
-		fn()
+		err := fn(ctx, r.Client)
+		if err != nil {
+			return err
+		}
 	}
 	return nil
 }
