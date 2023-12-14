@@ -24,7 +24,7 @@ type Property string
 
 func (p Property) jsonPath() string { return string(p) }
 
-func (p Property) reconcile(u_live, u_desired, u_normalizedLive map[string]any, logger logr.Logger) error {
+func (p Property) reconcile(u_live, u_desired map[string]any, logger logr.Logger) error {
 	expr, err := jp.ParseString(p.jsonPath())
 	if err != nil {
 		return fmt.Errorf("unable to parse JSONPath '%s': %w", p.jsonPath(), err)
@@ -34,13 +34,6 @@ func (p Property) reconcile(u_live, u_desired, u_normalizedLive map[string]any, 
 	liveVal := expr.Get(u_live)
 	if len(desiredVal) > 1 || len(liveVal) > 1 {
 		return fmt.Errorf("multi-valued JSONPath (%s) not supported when reconciling properties", p.jsonPath())
-	}
-
-	// store the live value for later comparison in u_normalizedLive
-	if len(liveVal) != 0 {
-		if err := expr.Set(u_normalizedLive, liveVal[0]); err != nil {
-			return fmt.Errorf("usable to add value '%v' in JSONPath '%s'", liveVal[0], p.jsonPath())
-		}
 	}
 
 	switch delta(len(desiredVal), len(liveVal)) {

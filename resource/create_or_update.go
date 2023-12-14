@@ -9,6 +9,7 @@ import (
 	"github.com/3scale-ops/basereconciler/util"
 	"github.com/go-logr/logr"
 	"github.com/nsf/jsondiff"
+	"github.com/ohler55/ojg/jp"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/equality"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -85,59 +86,40 @@ func CreateOrUpdate(ctx context.Context, cl client.Client, scheme *runtime.Schem
 		return nil, wrapError("unable to retrieve config for resource reconciler", key, gvk, err)
 	}
 
-	// normalizedLive is a struct that will be populated with only the reconciled
-	// properties and their respective live values. It will be used to compare it with
-	// the desire and determine in an update is required.
-	normalizedLive, err := util.NewObjectFromGVK(gvk, scheme)
+	// normalize both live and desired for comparison
+	normalizedDesired, err := normalize(desired, ensure, ignore, gvk, scheme)
 	if err != nil {
-		return nil, wrapError("unable to create object from GVK", key, gvk, err)
-	}
-	normalizedLive.SetName(desired.GetName())
-	normalizedLive.SetNamespace(desired.GetNamespace())
-
-	// convert to unstructured
-	u_desired, err := runtime.DefaultUnstructuredConverter.ToUnstructured(desired)
-	if err != nil {
-		return nil, wrapError("unable to convert to unstructured", key, gvk, err)
-
+		wrapError("unable to normalize desired", key, gvk, err)
 	}
 
-	u_live, err := runtime.DefaultUnstructuredConverter.ToUnstructured(live)
+	normalizedLive, err := normalize(live, ensure, ignore, gvk, scheme)
 	if err != nil {
-		return nil, wrapError("unable to convert to unstructured", key, gvk, err)
+		wrapError("unable to normalize live", key, gvk, err)
 	}
 
-	u_normalizedLive, err := runtime.DefaultUnstructuredConverter.ToUnstructured(normalizedLive)
-	if err != nil {
-		return nil, wrapError("unable to convert to unstructured", key, gvk, err)
-	}
+	if !equality.Semantic.DeepEqual(normalizedLive, normalizedDesired) {
+		logger.V(1).Info("resource update required", "diff", printfDiff(normalizedLive, normalizedDesired))
 
-	// reconcile properties
-	for _, property := range ensure {
-		if err := property.reconcile(u_live, u_desired, u_normalizedLive, logger); err != nil {
-			return nil, wrapError(fmt.Sprintf("unable to reconcile property %s", property), key, gvk, err)
+		// convert to unstructured
+		u_normalizedDesired, err := runtime.DefaultUnstructuredConverter.ToUnstructured(normalizedDesired)
+		if err != nil {
+			return nil, wrapError("unable to convert to unstructured", key, gvk, err)
+
 		}
-	}
 
-	// ignore properties
-	for _, property := range ignore {
-		for _, m := range []map[string]any{u_live, u_desired, u_normalizedLive} {
-			if err := property.ignore(m); err != nil {
-				return nil, wrapError(fmt.Sprintf("unable to ignore property %s", property), key, gvk, err)
+		u_live, err := runtime.DefaultUnstructuredConverter.ToUnstructured(live)
+		if err != nil {
+			return nil, wrapError("unable to convert to unstructured", key, gvk, err)
+		}
+
+		// reconcile properties
+		for _, property := range ensure {
+			if err := property.reconcile(u_live, u_normalizedDesired, logger); err != nil {
+				return nil, wrapError(fmt.Sprintf("unable to reconcile property %s", property), key, gvk, err)
 			}
 		}
-	}
 
-	// do the comparison using structs so "equality.Semantic" can be used
-	if err := runtime.DefaultUnstructuredConverter.FromUnstructured(u_normalizedLive, normalizedLive); err != nil {
-		return nil, wrapError("unable to convert from unstructured", key, gvk, err)
-	}
-	if err := runtime.DefaultUnstructuredConverter.FromUnstructured(u_desired, desired); err != nil {
-		return nil, wrapError("unable to convert from unstructured", key, gvk, err)
-	}
-	if !equality.Semantic.DeepEqual(normalizedLive, desired) {
-		logger.V(1).Info("resource update required", "diff", printfDiff(normalizedLive, desired))
-		err := cl.Update(ctx, client.Object(&unstructured.Unstructured{Object: u_live}))
+		err = cl.Update(ctx, client.Object(&unstructured.Unstructured{Object: u_live}))
 		if err != nil {
 			return nil, wrapError("unable to update resource", key, gvk, err)
 		}
@@ -145,6 +127,55 @@ func CreateOrUpdate(ctx context.Context, cl client.Client, scheme *runtime.Schem
 	}
 
 	return util.ObjectReference(live, gvk), nil
+}
+
+func normalize(o client.Object, ensure, ignore []Property, gvk schema.GroupVersionKind, s *runtime.Scheme) (client.Object, error) {
+
+	in, err := runtime.DefaultUnstructuredConverter.ToUnstructured(o)
+	if err != nil {
+		return nil, err
+	}
+	u_normalized := map[string]any{}
+
+	for _, p := range ensure {
+		expr, err := jp.ParseString(p.jsonPath())
+		if err != nil {
+			return nil, fmt.Errorf("unable to parse JSONPath '%s': %w", p.jsonPath(), err)
+		}
+		val := expr.Get(in)
+
+		switch len(val) {
+		case 0:
+			continue
+		case 1:
+			if err := expr.Set(u_normalized, val[0]); err != nil {
+				return nil, fmt.Errorf("usable to add value '%v' in JSONPath '%s'", val[0], p.jsonPath())
+			}
+		default:
+			return nil, fmt.Errorf("multi-valued JSONPath (%s) not supported for 'ensure' properties", p.jsonPath())
+		}
+
+	}
+
+	for _, p := range ignore {
+		expr, err := jp.ParseString(p.jsonPath())
+		if err != nil {
+			return nil, fmt.Errorf("unable to parse JSONPath '%s': %w", p.jsonPath(), err)
+		}
+		if err = expr.Del(u_normalized); err != nil {
+			return nil, fmt.Errorf("unable to parse delete JSONPath '%s' from unstructured: %w", p.jsonPath(), err)
+		}
+	}
+
+	normalized, err := util.NewObjectFromGVK(gvk, s)
+	if err != nil {
+		return nil, err
+	}
+	if err := runtime.DefaultUnstructuredConverter.FromUnstructured(u_normalized, normalized); err != nil {
+		return nil, err
+	}
+
+	return normalized, nil
 }
 
 func printfDiff(a, b client.Object) string {

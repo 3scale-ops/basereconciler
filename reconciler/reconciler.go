@@ -21,12 +21,12 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 )
 
-type action int
+type action string
 
 const (
-	ContinueAction         action = 0
-	ReturnAction           action = 1
-	ReturnAndRequeueAction action = 2
+	ContinueAction         action = "Continue"
+	ReturnAction           action = "Return"
+	ReturnAndRequeueAction action = "ReturnAndRequeue"
 )
 
 type Result struct {
@@ -127,8 +127,9 @@ func (r *Reconciler) GetInstance(ctx context.Context, req reconcile.Request, obj
 			}
 
 		}
-		// no finalizer, just return without doing anything
-		return Result{Error: nil}
+		// object being deleted, return without doing anything
+		// and stop the reconcile loop
+		return Result{Action: ReturnAction}
 	}
 
 	if ok := r.IsInitialized(obj, finalizer); !ok {
