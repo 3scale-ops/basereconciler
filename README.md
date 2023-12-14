@@ -24,7 +24,6 @@ import (
 	"github.com/3scale-ops/basereconciler/mutators"
 	"github.com/3scale-ops/basereconciler/reconciler"
 	"github.com/3scale-ops/basereconciler/resource"
-	"github.com/3scale-ops/basereconciler/util"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -40,15 +39,6 @@ import (
 // configuration options
 func init() {
 	config.SetDefaultReconcileConfigForGVK(
-		schema.FromAPIVersionAndKind("v1", "Service"),
-		config.ReconcileConfigForGVK{
-			EnsureProperties: []string{
-				"metadata.annotations",
-				"metadata.labels",
-				"spec",
-			},
-		})
-	config.SetDefaultReconcileConfigForGVK(
 		schema.FromAPIVersionAndKind("apps/v1", "Deployment"),
 		config.ReconcileConfigForGVK{
 			EnsureProperties: []string{
@@ -58,6 +48,19 @@ func init() {
 			},
 			IgnoreProperties: []string{
 				"metadata.annotations['deployment.kubernetes.io/revision']",
+			},
+		})
+	config.SetDefaultReconcileConfigForGVK(
+		// specifying a config for an empty GVK will
+		// set a default fallback config for any gvk that is not
+		// explicitely declared in the configuration. Think of it
+		// as a wildcard.
+		schema.GroupVersionKind{},
+		config.ReconcileConfigForGVK{
+			EnsureProperties: []string{
+				"metadata.annotations",
+				"metadata.labels",
+				"spec",
 			},
 		})
 }
@@ -77,12 +80,19 @@ func (r *GuestbookReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 	// copy of the context that includes the logger so it's easily passed around to other functions.
 	ctx, logger := r.Logger(ctx, "guestbook", req.NamespacedName)
 
-	// GetInstance will take care of retrieveing the custom resoure from the API. It is also in charge of the resource
-	// finalization logic if there is one. In this example, we are configuring a finalizer in our custom resource and passing
+	// ManageResourceLifecycle will take care of retrieving the custom resoure from the API. It is also in charge of the resource
+	// lifecycle: initialization and finalization logic. In this example, we are configuring a finalizer in our custom resource and passing
 	// a finalization function that will casuse a log line to show when the resource is being deleted.
 	guestbook := &webappv1.Guestbook{}
-	result := r.GetInstance(ctx, req, guestbook, util.Pointer("guestbook-finalizer"), func() { logger.Info("finalizing resource") })
-	if result.IsReturnAndRequeue() {
+	result := r.ManageResourceLifecycle(ctx, req, guestbook,
+		reconciler.WithFinalizer("guestbook-finalizer"),
+		reconciler.WithFinalizationFunc(
+			func(context.Context, client.Client) error {
+				logger.Info("finalizing resource")
+				return nil
+			}),
+	)
+	if result.ShouldReturn() {
 		return result.Values()
 	}
 
@@ -122,7 +132,7 @@ func (r *GuestbookReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 			WithIgnoreProperties([]resource.Property{"spec.clusterIP", "spec.clusterIPs"}),
 	})
 
-	if result.IsReturnAndRequeue() {
+	if result.ShouldReturn() {
 		return result.Values()
 	}
 
