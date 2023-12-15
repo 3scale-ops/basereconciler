@@ -49,7 +49,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 
 	ctx, _ = r.Logger(ctx, "name", req.Name, "namespace", req.Namespace)
 	obj := &v1alpha1.Test{}
-	result := r.ManageResourceLifecycle(ctx, req, obj, nil, nil)
+	result := r.ManageResourceLifecycle(ctx, req, obj)
 	if result.ShouldReturn() {
 		return result.Values()
 	}
