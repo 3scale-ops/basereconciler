@@ -239,6 +239,23 @@ func (r *Reconciler) ReconcileOwnedResources(ctx context.Context, owner client.O
 // The filter function receives both the object that generated the event and the object that
 // might need to be reconciled in response to that event. Depending on whether it returns true
 // or false the reconciler request will be generated or not.
+//
+// In the following example, a watch for Secret resources which match the name "secret" is added
+// to the reconciler. The watch will generate reconmcile requests for v1alpha1.Test resources
+// any time a Secret with name "secret" is created/uddated/deleted
+//
+//	func (r *Reconciler) SetupWithManager(mgr ctrl.Manager) error {
+//		return ctrl.NewControllerManagedBy(mgr).
+//			For(&v1alpha1.Test{}).
+//			Watches(&source.Kind{Type: &corev1.Secret{TypeMeta: metav1.TypeMeta{Kind: "Secret"}}},
+//				r.FilteredEventHandler(
+//					&v1alpha1.TestList{},
+//					func(event, o client.Object) bool {
+//						return event.GetName() == "secret"
+//					},
+//					r.Log)).
+//			Complete(r)
+//	}
 func (r *Reconciler) FilteredEventHandler(ol client.ObjectList,
 	filter func(event client.Object, o client.Object) bool, logger logr.Logger) handler.EventHandler {
 
