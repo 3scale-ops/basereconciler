@@ -154,7 +154,12 @@ func (r *Reconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Owns(&policyv1.PodDisruptionBudget{}).
 		Owns(&autoscalingv2.HorizontalPodAutoscaler{}).
 		Watches(&source.Kind{Type: &corev1.Secret{TypeMeta: metav1.TypeMeta{Kind: "Secret"}}},
-			r.SecretEventHandler(&v1alpha1.TestList{}, r.Log)).
+			r.FilteredEventHandler(
+				&v1alpha1.TestList{},
+				func(event, o client.Object) bool {
+					return event.GetName() == "secret"
+				},
+				r.Log)).
 		Complete(r)
 }
 

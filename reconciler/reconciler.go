@@ -86,18 +86,12 @@ type Reconciler struct {
 	client.Client
 	Log         logr.Logger
 	Scheme      *runtime.Scheme
-	gvk         schema.GroupVersionKind
 	typeTracker typeTracker
 }
 
 // NewFromManager returns a new Reconciler from a controller-runtime manager.Manager
 func NewFromManager(mgr manager.Manager) *Reconciler {
 	return &Reconciler{Client: mgr.GetClient(), Scheme: mgr.GetScheme(), Log: logr.Discard()}
-}
-
-func (r *Reconciler) WithGVK(apiVersion, kind string) *Reconciler {
-	r.gvk = schema.FromAPIVersionAndKind(apiVersion, kind)
-	return r
 }
 
 // WithLogger sets the Reconciler logger
@@ -238,12 +232,18 @@ func (r *Reconciler) ReconcileOwnedResources(ctx context.Context, owner client.O
 	return Result{Action: ContinueAction}
 }
 
-// SecretEventHandler returns an EventHandler for the specific client.ObjectList
-// list object passed as parameter
-// TODO: generalize this to watch any object type
-func (r *Reconciler) SecretEventHandler(ol client.ObjectList, logger logr.Logger) handler.EventHandler {
+// FilteredEventHandler returns an EventHandler for the specific client.ObjectList
+// passed as parameter. It will produce reconcile requests for any client.Object of the
+// given type that returns true when passed to the filter function. If the filter function
+// is "nil" all the listed object will receive a reconcile request.
+// The filter function receives both the object that generated the event and the object that
+// might need to be reconciled in response to that event. Depending on whether it returns true
+// or false the reconciler request will be generated or not.
+func (r *Reconciler) FilteredEventHandler(ol client.ObjectList,
+	filter func(event client.Object, o client.Object) bool, logger logr.Logger) handler.EventHandler {
+
 	return handler.EnqueueRequestsFromMapFunc(
-		func(o client.Object) []reconcile.Request {
+		func(event client.Object) []reconcile.Request {
 			if err := r.Client.List(context.TODO(), ol); err != nil {
 				logger.Error(err, "unable to retrieve the list of resources")
 				return []reconcile.Request{}
@@ -253,11 +253,13 @@ func (r *Reconciler) SecretEventHandler(ol client.ObjectList, logger logr.Logger
 				return []reconcile.Request{}
 			}
 
-			// This is a bit undiscriminate as we don't have a way to detect which
-			// resources are interested in the event, so we just wake them all up
-			// TODO: pass a function that can decide if the event is of interest for a given resource
 			req := make([]reconcile.Request, 0, len(items))
 			for _, item := range items {
+				if filter != nil {
+					if !filter(event, item) {
+						continue
+					}
+				}
 				req = append(req, reconcile.Request{NamespacedName: client.ObjectKeyFromObject(item)})
 			}
 			return req

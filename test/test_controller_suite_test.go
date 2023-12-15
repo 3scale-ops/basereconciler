@@ -2,6 +2,7 @@ package test
 
 import (
 	"context"
+	"time"
 
 	"github.com/3scale-ops/basereconciler/test/api/v1alpha1"
 	"github.com/3scale-ops/basereconciler/util"
@@ -124,6 +125,31 @@ var _ = Describe("Test controller", func() {
 				// Value of the annotation should be the hash of the Secret new contents
 				return value == util.Hash(secret.Data)
 			}, timeout, poll).Should(BeTrue())
+		})
+
+		It("Ignores changes in other secrets", func() {
+
+			dep := resources[0].(*appsv1.Deployment)
+			// Annotations should be empty when Secret does not exists
+			resourceVersion := dep.GetResourceVersion()
+
+			secret := &corev1.Secret{
+				ObjectMeta: metav1.ObjectMeta{Name: "some-other-secret", Namespace: namespace},
+				Type:       corev1.SecretTypeOpaque,
+				Data:       map[string][]byte{"KEY": []byte("value")},
+			}
+			err := k8sClient.Create(context.Background(), secret)
+			Expect(err).ToNot(HaveOccurred())
+
+			time.Sleep(1 * time.Second)
+			err = k8sClient.Get(
+				context.Background(),
+				types.NamespacedName{Name: "deployment", Namespace: namespace},
+				dep,
+			)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(resourceVersion).To(Equal(dep.GetResourceVersion()))
+
 		})
 
 		It("deletes specific resources when disabled", func() {
