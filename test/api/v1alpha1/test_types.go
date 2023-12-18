@@ -21,6 +21,7 @@ package v1alpha1
 
 import (
 	"github.com/3scale-ops/basereconciler/reconciler"
+	"github.com/3scale-ops/basereconciler/util"
 	appsv1 "k8s.io/api/apps/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -77,6 +78,18 @@ type Test struct {
 
 	Spec   TestSpec   `json:"spec,omitempty"`
 	Status TestStatus `json:"status,omitempty"`
+}
+
+func (test *Test) Default() {
+	if test.Spec.HPA == nil {
+		test.Spec.HPA = util.Pointer(false)
+	}
+	if test.Spec.PDB == nil {
+		test.Spec.PDB = util.Pointer(false)
+	}
+	if test.Spec.PruneService == nil {
+		test.Spec.PruneService = util.Pointer(false)
+	}
 }
 
 var _ reconciler.ObjectWithAppStatus = &Test{}

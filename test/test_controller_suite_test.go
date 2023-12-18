@@ -17,6 +17,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/utils/pointer"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 )
 
 var _ = Describe("Test controller", func() {
@@ -41,6 +42,60 @@ var _ = Describe("Test controller", func() {
 		n := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: namespace}}
 		err := k8sClient.Delete(context.Background(), n, client.PropagationPolicy(metav1.DeletePropagationForeground))
 		Expect(err).ToNot(HaveOccurred())
+	})
+
+	Context("Manages instance lifecycle", func() {
+		BeforeEach(func() {
+			By("creating a Test simple resource")
+			instance = &v1alpha1.Test{
+				ObjectMeta: metav1.ObjectMeta{Name: "instance", Namespace: namespace},
+				Spec:       v1alpha1.TestSpec{},
+			}
+			err := k8sClient.Create(context.Background(), instance)
+			Expect(err).ToNot(HaveOccurred())
+			Eventually(func() error {
+				return k8sClient.Get(context.Background(), types.NamespacedName{Name: "instance", Namespace: namespace}, instance)
+			}, timeout, poll).ShouldNot(HaveOccurred())
+		})
+
+		AfterEach(func() {
+			k8sClient.Delete(context.Background(), instance, client.PropagationPolicy(metav1.DeletePropagationForeground))
+		})
+
+		It("initializes the custom resource", func() {
+			Eventually(func() bool {
+				err := k8sClient.Get(context.Background(), types.NamespacedName{Name: "instance", Namespace: namespace}, instance)
+				if err != nil {
+					return false
+				}
+				return (instance.Spec.HPA != nil && !*instance.Spec.HPA) &&
+					(instance.Spec.PDB != nil && !*instance.Spec.PDB) &&
+					(instance.Spec.PruneService != nil && !*instance.Spec.PruneService) &&
+					controllerutil.ContainsFinalizer(instance, "finalizer")
+
+			}, timeout, poll).Should(BeTrue())
+		})
+
+		When("the custom resource is deleted", func() {
+			BeforeEach(func() {
+				By("deleting the custom resource")
+				err := k8sClient.Delete(context.Background(), instance, client.PropagationPolicy(metav1.DeletePropagationForeground))
+				Expect(err).ToNot(HaveOccurred())
+			})
+
+			It("executes finalization logic", func() {
+				Eventually(func() bool {
+					cm := &corev1.ConfigMap{}
+					err := k8sClient.Get(context.Background(), types.NamespacedName{Name: "cm", Namespace: namespace}, cm)
+					if err != nil {
+						return false
+					}
+					_, ok := cm.Data["removed"]
+					return ok
+
+				}, timeout, poll).Should(BeTrue())
+			})
+		})
 	})
 
 	Context("Creates resources", func() {

@@ -49,7 +49,22 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 
 	ctx, _ = r.Logger(ctx, "name", req.Name, "namespace", req.Namespace)
 	obj := &v1alpha1.Test{}
-	result := r.ManageResourceLifecycle(ctx, req, obj)
+	result := r.ManageResourceLifecycle(ctx, req, obj,
+		reconciler.WithInitializationFunc(util.ResourceDefaulter(obj)),
+		reconciler.WithFinalizer("finalizer"),
+		// create a configmap when the custom resource is deleted
+		reconciler.WithFinalizationFunc(func(context.Context, client.Client) error {
+			cm := &corev1.ConfigMap{
+				ObjectMeta: metav1.ObjectMeta{Name: "cm", Namespace: req.Namespace},
+				Data:       map[string]string{"removed": "yes"},
+			}
+			err := r.Client.Create(ctx, cm)
+			if err != nil {
+				return err
+			}
+			return nil
+		}),
+	)
 	if result.ShouldReturn() {
 		return result.Values()
 	}
