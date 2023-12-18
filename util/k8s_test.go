@@ -1,6 +1,7 @@
 package util
 
 import (
+	"context"
 	"reflect"
 	"testing"
 
@@ -146,6 +147,51 @@ func TestNewObjectListFromGVK(t *testing.T) {
 			}
 			if !reflect.DeepEqual(got, tt.want) {
 				t.Errorf("NewFromGVK() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+type testResource struct {
+	*corev1.Service
+}
+
+func (o *testResource) Default() {
+	o.SetLabels(map[string]string{"key": "value"})
+}
+func TestResourceDefaulter(t *testing.T) {
+	type args struct {
+		o *testResource
+	}
+	tests := []struct {
+		name  string
+		args  args
+		check func(client.Object) bool
+	}{
+		{
+			name: "Calling the ResourceDefaulter applies defaults",
+			args: args{
+				o: &testResource{
+					Service: &corev1.Service{ObjectMeta: metav1.ObjectMeta{
+						Name: "test", Namespace: "ns",
+					}},
+				},
+			},
+			check: func(o client.Object) bool {
+				if v, ok := o.GetLabels()["key"]; ok {
+					if v == "value" {
+						return true
+					}
+				}
+				return false
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_ = ResourceDefaulter(tt.args.o)(context.TODO(), nil, tt.args.o)
+			if !tt.check(tt.args.o) {
+				t.Errorf("ResourceDefaulter() got %v", tt.args.o)
 			}
 		})
 	}

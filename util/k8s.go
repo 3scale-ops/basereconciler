@@ -1,6 +1,7 @@
 package util
 
 import (
+	"context"
 	"fmt"
 	"reflect"
 	"strings"
@@ -73,5 +74,18 @@ func ObjectReference(o client.Object, gvk schema.GroupVersionKind) *corev1.Objec
 		UID:             o.GetUID(),
 		APIVersion:      gvk.GroupVersion().String(),
 		ResourceVersion: o.GetResourceVersion(),
+	}
+}
+
+// Defaulter defines functions for setting defaults on resources.
+type Defaulter interface {
+	client.Object
+	Default()
+}
+
+func ResourceDefaulter(o Defaulter) func(context.Context, client.Client, client.Object) error {
+	return func(_ context.Context, _ client.Client, o client.Object) error {
+		o.(Defaulter).Default()
+		return nil
 	}
 }

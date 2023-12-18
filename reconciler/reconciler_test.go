@@ -143,7 +143,7 @@ func TestReconciler_ManageResourceLifecycle(t *testing.T) {
 	type args struct {
 		req  reconcile.Request
 		obj  client.Object
-		opts []LifecycleOption
+		opts []lifecycleOption
 	}
 	tests := []struct {
 		name       string
@@ -166,7 +166,7 @@ func TestReconciler_ManageResourceLifecycle(t *testing.T) {
 			args: args{
 				req:  reconcile.Request{NamespacedName: types.NamespacedName{Name: "my-resource", Namespace: "ns"}},
 				obj:  &corev1.Service{},
-				opts: []LifecycleOption{},
+				opts: []lifecycleOption{},
 			},
 			want: Result{
 				Action:       ContinueAction,
@@ -185,7 +185,7 @@ func TestReconciler_ManageResourceLifecycle(t *testing.T) {
 			args: args{
 				req:  reconcile.Request{NamespacedName: types.NamespacedName{Name: "my-resource", Namespace: "ns"}},
 				obj:  &corev1.Service{},
-				opts: []LifecycleOption{},
+				opts: []lifecycleOption{},
 			},
 			want: Result{
 				Action:       ReturnAction,
@@ -209,7 +209,7 @@ func TestReconciler_ManageResourceLifecycle(t *testing.T) {
 			args: args{
 				req:  reconcile.Request{NamespacedName: types.NamespacedName{Name: "my-resource", Namespace: "ns"}},
 				obj:  &corev1.Service{},
-				opts: []LifecycleOption{},
+				opts: []lifecycleOption{},
 			},
 			want: Result{
 				Action:       ReturnAction,
@@ -232,7 +232,7 @@ func TestReconciler_ManageResourceLifecycle(t *testing.T) {
 			args: args{
 				req:  reconcile.Request{NamespacedName: types.NamespacedName{Name: "my-resource", Namespace: "ns"}},
 				obj:  &corev1.Service{},
-				opts: []LifecycleOption{WithFinalizer("finalizer")},
+				opts: []lifecycleOption{WithFinalizer("finalizer")},
 			},
 			want: Result{
 				Action:       ReturnAndRequeueAction,
@@ -260,7 +260,7 @@ func TestReconciler_ManageResourceLifecycle(t *testing.T) {
 			args: args{
 				req: reconcile.Request{NamespacedName: types.NamespacedName{Name: "my-resource", Namespace: "ns"}},
 				obj: &corev1.Service{},
-				opts: []LifecycleOption{
+				opts: []lifecycleOption{
 					WithFinalizer("finalizer"),
 					WithFinalizationFunc(func(ctx context.Context, c client.Client) error {
 						o := &corev1.ServiceAccount{}
@@ -296,7 +296,7 @@ func TestReconciler_ManageResourceLifecycle(t *testing.T) {
 			args: args{
 				req: reconcile.Request{NamespacedName: types.NamespacedName{Name: "my-resource", Namespace: "ns"}},
 				obj: &corev1.Service{},
-				opts: []LifecycleOption{
+				opts: []lifecycleOption{
 					WithFinalizer("finalizer"),
 				},
 			},
@@ -324,7 +324,7 @@ func TestReconciler_ManageResourceLifecycle(t *testing.T) {
 			args: args{
 				req: reconcile.Request{NamespacedName: types.NamespacedName{Name: "my-resource", Namespace: "ns"}},
 				obj: &corev1.Service{},
-				opts: []LifecycleOption{
+				opts: []lifecycleOption{
 					WithFinalizer("finalizer"),
 				},
 			},
@@ -336,6 +336,37 @@ func TestReconciler_ManageResourceLifecycle(t *testing.T) {
 			wantObject: &corev1.Service{ObjectMeta: metav1.ObjectMeta{
 				Name: "my-resource", Namespace: "ns",
 				Finalizers: []string{"finalizer"},
+			}},
+		},
+		{
+			name: "Runs initialization logic",
+			fields: fields{
+				Client: fake.NewClientBuilder().WithObjects(
+					&corev1.Service{ObjectMeta: metav1.ObjectMeta{
+						Name: "my-resource", Namespace: "ns",
+					}},
+				).Build(),
+				Log:    logr.Discard(),
+				Scheme: scheme.Scheme,
+			},
+			args: args{
+				req: reconcile.Request{NamespacedName: types.NamespacedName{Name: "my-resource", Namespace: "ns"}},
+				obj: &corev1.Service{},
+				opts: []lifecycleOption{
+					WithInitializationFunc(func(ctx context.Context, c client.Client, o client.Object) error {
+						o.SetLabels(map[string]string{"initialized": "yes"})
+						return nil
+					}),
+				},
+			},
+			want: Result{
+				Action:       ReturnAndRequeueAction,
+				RequeueAfter: 0,
+				Error:        nil,
+			},
+			wantObject: &corev1.Service{ObjectMeta: metav1.ObjectMeta{
+				Name: "my-resource", Namespace: "ns",
+				Labels: map[string]string{"initialized": "yes"},
 			}},
 		},
 	}

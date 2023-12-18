@@ -9,6 +9,7 @@ import (
 	"github.com/3scale-ops/basereconciler/util"
 	"github.com/go-logr/logr"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/equality"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -48,36 +49,76 @@ func (result Result) Values() (ctrl.Result, error) {
 		result.Error
 }
 
-var options = struct {
-	finalizer         *string
-	finalizationLogic []finalizationFunction
-}{
-	finalizer:         nil,
-	finalizationLogic: []finalizationFunction{},
+type lifecycleOptions struct {
+	initializationLogic         []initializationFunction
+	inMemoryinitializationLogic []inMemoryinitializationFunction
+	finalizer                   *string
+	finalizationLogic           []finalizationFunction
 }
 
-// LifecycleOption is an interface that defines options that can be passed to
+func newLifecycleOptions() *lifecycleOptions {
+	return &lifecycleOptions{finalizationLogic: []finalizationFunction{}}
+}
+
+// lifecycleOption is an interface that defines options that can be passed to
 // the reconciler's ManageResourceLifecycle() function
-type LifecycleOption interface {
-	applyToLifecycleOptions()
+type lifecycleOption interface {
+	applyToLifecycleOptions(*lifecycleOptions)
 }
 
 type finalizer string
 
-func (f finalizer) applyToLifecycleOptions() {
-	options.finalizer = util.Pointer(string(f))
+func (f finalizer) applyToLifecycleOptions(opts *lifecycleOptions) {
+	opts.finalizer = util.Pointer(string(f))
+	opts.initializationLogic = append(opts.initializationLogic, f.initFinalizer)
 }
+
+// WithFinalizer can be used to provide a finalizer string that the resource will be initialized with
+// For finalization logic to be run before objet deletion, a finalizar must be passed.
 func WithFinalizer(f string) finalizer {
 	return finalizer(f)
 }
 
-type finalizationFunction func(context.Context, client.Client) error
-
-func (fn finalizationFunction) applyToLifecycleOptions() {
-	options.finalizationLogic = append(options.finalizationLogic, fn)
+func (f finalizer) initFinalizer(ctx context.Context, c client.Client, o client.Object) error {
+	if !controllerutil.ContainsFinalizer(o, string(f)) {
+		controllerutil.AddFinalizer(o, string(f))
+	}
+	return nil
 }
 
+type finalizationFunction func(context.Context, client.Client) error
+
+func (fn finalizationFunction) applyToLifecycleOptions(opts *lifecycleOptions) {
+	opts.finalizationLogic = append(opts.finalizationLogic, fn)
+}
+
+// WithFinalizationFunc can be used to provide functions that will be run on object finalization. A Finalizer must be set for
+// these functions to be called.
 func WithFinalizationFunc(fn func(context.Context, client.Client) error) finalizationFunction {
+	return fn
+}
+
+type initializationFunction func(context.Context, client.Client, client.Object) error
+
+func (fn initializationFunction) applyToLifecycleOptions(opts *lifecycleOptions) {
+	opts.initializationLogic = append(opts.initializationLogic, fn)
+}
+
+// WithInitializationFunc can be used to provide functions that run resource initialization, like for example
+// applying defaults or labels to the resource.
+func WithInitializationFunc(fn func(context.Context, client.Client, client.Object) error) initializationFunction {
+	return fn
+}
+
+type inMemoryinitializationFunction func(context.Context, client.Client, client.Object) error
+
+func (fn inMemoryinitializationFunction) applyToLifecycleOptions(opts *lifecycleOptions) {
+	opts.inMemoryinitializationLogic = append(opts.inMemoryinitializationLogic, fn)
+}
+
+// WithInitializationFunc can be used to provide functions that run resource initialization, like for example
+// applying defaults or labels to the resource.
+func WithInMemoryInitializationFunc(fn func(context.Context, client.Client, client.Object) error) inMemoryinitializationFunction {
 	return fn
 }
 
@@ -122,10 +163,11 @@ func (r *Reconciler) Logger(ctx context.Context, keysAndValues ...interface{}) (
 //     run when the custom resource is being deleted. Only works with a non-nil finalizer, otherwise
 //     the custom resource will be immediately deleted and the functions won't run.
 func (r *Reconciler) ManageResourceLifecycle(ctx context.Context, req reconcile.Request, obj client.Object,
-	opts ...LifecycleOption) Result {
+	opts ...lifecycleOption) Result {
 
+	options := newLifecycleOptions()
 	for _, o := range opts {
-		o.applyToLifecycleOptions()
+		o.applyToLifecycleOptions(options)
 	}
 
 	ctx, logger := r.Logger(ctx)
@@ -145,7 +187,7 @@ func (r *Reconciler) ManageResourceLifecycle(ctx context.Context, req reconcile.
 		// resource
 		if options.finalizer != nil && controllerutil.ContainsFinalizer(obj, *options.finalizer) {
 
-			err := r.Finalize(ctx, options.finalizationLogic, logger)
+			err := r.finalize(ctx, options.finalizationLogic, logger)
 			if err != nil {
 				logger.Error(err, "unable to delete instance")
 				return Result{Error: err}
@@ -163,7 +205,11 @@ func (r *Reconciler) ManageResourceLifecycle(ctx context.Context, req reconcile.
 		return Result{Action: ReturnAction}
 	}
 
-	if ok := r.IsInitialized(obj, options.finalizer); !ok {
+	ok, err := r.isInitialized(ctx, obj, options.initializationLogic)
+	if err != nil {
+		return Result{Error: err}
+	}
+	if !ok {
 		err := r.Client.Update(ctx, obj)
 		if err != nil {
 			logger.Error(err, "unable to initialize instance")
@@ -171,23 +217,49 @@ func (r *Reconciler) ManageResourceLifecycle(ctx context.Context, req reconcile.
 		}
 		return Result{Action: ReturnAndRequeueAction}
 	}
+
+	if err := r.inMemoryInitialization(ctx, obj, options.inMemoryinitializationLogic); err != nil {
+		return Result{Error: err}
+	}
+
 	return Result{Action: ContinueAction}
 }
 
-// IsInitialized can be used to check if instance is correctly initialized.
-// Returns false if it isn't.
-func (r *Reconciler) IsInitialized(obj client.Object, finalizer *string) bool {
-	ok := true
-	if finalizer != nil && !controllerutil.ContainsFinalizer(obj, *finalizer) {
-		controllerutil.AddFinalizer(obj, *finalizer)
-		ok = false
+// isInitialized can be used to check if instance is correctly initialized.
+// Returns false if it isn't and an update is required.
+func (r *Reconciler) isInitialized(ctx context.Context, obj client.Object, fns []initializationFunction) (bool, error) {
+	orig := obj.DeepCopyObject()
+	for _, fn := range fns {
+		err := fn(ctx, r.Client, obj)
+		if err != nil {
+			return false, err
+		}
 	}
 
-	return ok
+	if !equality.Semantic.DeepEqual(orig, obj) {
+		return false, nil
+	}
+
+	return true, nil
 }
 
-// Finalize contains finalization logic for the Reconciler
-func (r *Reconciler) Finalize(ctx context.Context, fns []finalizationFunction, log logr.Logger) error {
+// inMemoryInitialization can be used to perform initializarion on the resource that is not
+// persisted in the API storage. This can be used to perform initialization on the resource without
+// writing it to the API to avoid surfacing it uo to the user. This approach is a bit more
+// gitops firendly as it avoids modifying the resource, but it doesn't provide any information
+// to the user on the initialization being used for reconciliation.
+func (r *Reconciler) inMemoryInitialization(ctx context.Context, obj client.Object, fns []inMemoryinitializationFunction) error {
+	for _, fn := range fns {
+		err := fn(ctx, r.Client, obj)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// finalize contains finalization logic for the Reconciler
+func (r *Reconciler) finalize(ctx context.Context, fns []finalizationFunction, log logr.Logger) error {
 	// Call any cleanup functions passed
 	for _, fn := range fns {
 		err := fn(ctx, r.Client)
