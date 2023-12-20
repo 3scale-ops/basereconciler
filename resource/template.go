@@ -34,7 +34,7 @@ type Template[T client.Object] struct {
 	// object.
 	TemplateBuilder TemplateBuilderFunction[T]
 	// TemplateMutations are functions that are called during Build() after
-	// TemplateBuilder has ben invoked, to perform mutations on the object that require
+	// TemplateBuilder has been invoked, to perform mutations on the object that require
 	// access to a kubernetes API server.
 	TemplateMutations []TemplateMutationFunction
 	// IsEnabled specifies whether the resourse described by this Template should

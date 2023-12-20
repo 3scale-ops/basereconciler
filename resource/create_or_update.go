@@ -22,7 +22,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 )
 
-// CreateOrUpdate cretes or updates resources. The function receives several paremters:
+// CreateOrUpdate cretes or updates resources. The function receives several parameters:
 //   - ctx: the context. The logger is expected to be within the context, otherwise the function won't
 //     produce any logs.
 //   - cl: the kubernetes API client
