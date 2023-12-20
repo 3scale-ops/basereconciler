@@ -157,11 +157,17 @@ func (r *Reconciler) Logger(ctx context.Context, keysAndValues ...interface{}) (
 // ManageResourceLifecycle manages the lifecycle of the resource, from initialization to
 // finalization and deletion.
 // The behaviour can be modified depending on the options passed to the function:
-//   - finalizer: if a non-nil finalizer is passed to the function, it will ensure that the
-//     custom resource has a finalizer in place, updasting it if required.
-//   - cleanupFns: variadic parameter that allows passing cleanup functions that will be
-//     run when the custom resource is being deleted. Only works with a non-nil finalizer, otherwise
-//     the custom resource will be immediately deleted and the functions won't run.
+//   - WithInitializationFunc(...): pass a function with initialization logic for the custom resource.
+//     The function will be executed and if changes to the custom resource are detected the resource will
+//     be updated. It can be used to set default values on the custom resource. Can be used more than once.
+//   - WithInMemoryInitializationFunc(...): pass a function with initialization logic to the custom resource.
+//     If the custom resource is modified in nay way, the changes won't be persisted in the API server and will
+//     only have effect within the reconcile loop. Can be used more than once.
+//   - WithFinalizer(...): passes a string that will be configured as a resource finalizar, ensuring that the
+//     custom resource has the finalizer in place, updating it if required.
+//   - WithFinalizationFunc(...): pass finalization functions that will be
+//     run when the custom resource is being deleted. Only works ifa finalizer is also passed, otherwise
+//     the custom resource will be immediately deleted and the functions won't run. Can be used more than once.
 func (r *Reconciler) ManageResourceLifecycle(ctx context.Context, req reconcile.Request, obj client.Object,
 	opts ...lifecycleOption) Result {
 
