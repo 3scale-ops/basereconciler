@@ -1,5 +1,5 @@
 # ENVTEST_K8S_VERSION refers to the version of kubebuilder assets to be downloaded by envtest binary.
-ENVTEST_K8S_VERSION = 1.24
+ENVTEST_K8S_VERSION = 1.27
 
 # Get the currently used golang install path (in GOPATH/bin, unless GOBIN is set)
 ifeq (,$(shell go env GOBIN))
@@ -42,10 +42,13 @@ vet: ## Run go vet against code.
 
 ##@ Test
 KUBEBUILDER_ASSETS = "$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) -p path)"
-TEST_PKG = ./test/...
+TEST_PKG = ./...
 
 test: manifests generate fmt vet envtest ginkgo ## Run tests.
 	KUBEBUILDER_ASSETS=$(KUBEBUILDER_ASSETS) $(GINKGO) -p -r $(TEST_PKG)
+
+test-debug: manifests generate fmt vet envtest ginkgo ## Run tests.
+	KUBEBUILDER_ASSETS=$(KUBEBUILDER_ASSETS) $(GINKGO) -v -r $(TEST_PKG)
 
 manifests: controller-gen ## Generate WebhookConfiguration, ClusterRole and CustomResourceDefinition objects.
 	$(CONTROLLER_GEN) crd paths="./test/..." output:crd:artifacts:config="./test/api/v1alpha1"

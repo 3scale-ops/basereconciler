@@ -20,7 +20,8 @@ limitations under the License.
 package v1alpha1
 
 import (
-	"github.com/3scale-ops/basereconciler/status"
+	"github.com/3scale-ops/basereconciler/reconciler"
+	"github.com/3scale-ops/basereconciler/util"
 	appsv1 "k8s.io/api/apps/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -47,14 +48,16 @@ type TestSpec struct {
 	HPA *bool `json:"hpa,omitempty"`
 	// +optional
 	ServiceAnnotations map[string]string `json:"serviceAnnotations,omitempty"`
+	// +optional
+	PruneService *bool `json:"pruneService,omitempty"`
 }
 
 // TestStatus defines the observed state of Test
 type TestStatus struct {
 	// +operator-sdk:csv:customresourcedefinitions:type=spec
 	// +optional
-	*appsv1.DeploymentStatus              `json:"deploymentStatus,omitempty"`
-	status.UnimplementedStatefulSetStatus `json:"-"`
+	*appsv1.DeploymentStatus                  `json:"deploymentStatus,omitempty"`
+	reconciler.UnimplementedStatefulSetStatus `json:"-"`
 }
 
 func (dss *TestStatus) GetDeploymentStatus(key types.NamespacedName) *appsv1.DeploymentStatus {
@@ -77,9 +80,21 @@ type Test struct {
 	Status TestStatus `json:"status,omitempty"`
 }
 
-var _ status.ObjectWithAppStatus = &Test{}
+func (test *Test) Default() {
+	if test.Spec.HPA == nil {
+		test.Spec.HPA = util.Pointer(false)
+	}
+	if test.Spec.PDB == nil {
+		test.Spec.PDB = util.Pointer(false)
+	}
+	if test.Spec.PruneService == nil {
+		test.Spec.PruneService = util.Pointer(false)
+	}
+}
 
-func (t *Test) GetStatus() status.AppStatus {
+var _ reconciler.ObjectWithAppStatus = &Test{}
+
+func (t *Test) GetStatus() reconciler.AppStatus {
 	return &t.Status
 }
 

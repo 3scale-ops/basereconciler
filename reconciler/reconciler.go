@@ -3,268 +3,342 @@ package reconciler
 import (
 	"context"
 	"fmt"
-	"reflect"
-	"strconv"
+	"time"
 
+	"github.com/3scale-ops/basereconciler/resource"
 	"github.com/3scale-ops/basereconciler/util"
-	externalsecretsv1beta1 "github.com/external-secrets/external-secrets/apis/externalsecrets/v1beta1"
 	"github.com/go-logr/logr"
-	grafanav1alpha1 "github.com/grafana-operator/grafana-operator/v4/api/integreatly/v1alpha1"
-	monitoringv1 "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
-	pipelinev1beta1 "github.com/tektoncd/pipeline/pkg/apis/pipeline/v1beta1"
-	appsv1 "k8s.io/api/apps/v1"
-	autoscalingv2 "k8s.io/api/autoscaling/v2"
 	corev1 "k8s.io/api/core/v1"
-	policyv1 "k8s.io/api/policy/v1"
-	rbacv1 "k8s.io/api/rbac/v1"
+	"k8s.io/apimachinery/pkg/api/equality"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
-	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 )
 
-type ReconcilerManagedTypes []client.ObjectList
+type action string
 
-func (mts ReconcilerManagedTypes) Register(mt client.ObjectList) ReconcilerManagedTypes {
-	mts = append(mts, mt)
-	return mts
+const (
+	ContinueAction         action = "Continue"
+	ReturnAction           action = "Return"
+	ReturnAndRequeueAction action = "ReturnAndRequeue"
+)
+
+type Result struct {
+	Action       action
+	RequeueAfter time.Duration
+	Error        error
 }
 
-func NewManagedTypes() ReconcilerManagedTypes {
-	return ReconcilerManagedTypes{}
+func (result Result) ShouldReturn() bool {
+	return result.Action == ReturnAction || result.Action == ReturnAndRequeueAction || result.Error != nil
 }
 
-type ReconcilerOptions struct {
-	ManagedTypes      ReconcilerManagedTypes
-	AnnotationsDomain string
-	ResourcePruner    bool
+func (result Result) Values() (ctrl.Result, error) {
+
+	return ctrl.Result{
+			Requeue:      func() bool { return result.Action == ReturnAndRequeueAction }(),
+			RequeueAfter: result.RequeueAfter,
+		},
+		result.Error
 }
 
-var Config ReconcilerOptions = ReconcilerOptions{
-	AnnotationsDomain: "basereconciler.3cale.net",
-	ResourcePruner:    true,
-	ManagedTypes: ReconcilerManagedTypes{
-		&corev1.ServiceList{},
-		&corev1.ConfigMapList{},
-		&appsv1.DeploymentList{},
-		&appsv1.StatefulSetList{},
-		&externalsecretsv1beta1.ExternalSecretList{},
-		&grafanav1alpha1.GrafanaDashboardList{},
-		&autoscalingv2.HorizontalPodAutoscalerList{},
-		&policyv1.PodDisruptionBudgetList{},
-		&monitoringv1.PodMonitorList{},
-		&rbacv1.RoleBindingList{},
-		&rbacv1.RoleList{},
-		&corev1.ServiceAccountList{},
-		&pipelinev1beta1.PipelineList{},
-		&pipelinev1beta1.TaskList{},
-	},
+type lifecycleOptions struct {
+	initializationLogic         []initializationFunction
+	inMemoryinitializationLogic []inMemoryinitializationFunction
+	finalizer                   *string
+	finalizationLogic           []finalizationFunction
 }
 
-type Resource interface {
-	Build(ctx context.Context, cl client.Client) (client.Object, error)
-	Enabled() bool
-	ResourceReconciler(context.Context, client.Client, client.Object) error
+func newLifecycleOptions() *lifecycleOptions {
+	return &lifecycleOptions{finalizationLogic: []finalizationFunction{}}
+}
+
+// lifecycleOption is an interface that defines options that can be passed to
+// the reconciler's ManageResourceLifecycle() function
+type lifecycleOption interface {
+	applyToLifecycleOptions(*lifecycleOptions)
+}
+
+type finalizer string
+
+func (f finalizer) applyToLifecycleOptions(opts *lifecycleOptions) {
+	opts.finalizer = util.Pointer(string(f))
+	opts.initializationLogic = append(opts.initializationLogic, f.initFinalizer)
+}
+
+// WithFinalizer can be used to provide a finalizer string that the resource will be initialized with
+// For finalization logic to be run before objet deletion, a finalizar must be passed.
+func WithFinalizer(f string) finalizer {
+	return finalizer(f)
+}
+
+func (f finalizer) initFinalizer(ctx context.Context, c client.Client, o client.Object) error {
+	if !controllerutil.ContainsFinalizer(o, string(f)) {
+		controllerutil.AddFinalizer(o, string(f))
+	}
+	return nil
+}
+
+type finalizationFunction func(context.Context, client.Client) error
+
+func (fn finalizationFunction) applyToLifecycleOptions(opts *lifecycleOptions) {
+	opts.finalizationLogic = append(opts.finalizationLogic, fn)
+}
+
+// WithFinalizationFunc can be used to provide functions that will be run on object finalization. A Finalizer must be set for
+// these functions to be called.
+func WithFinalizationFunc(fn func(context.Context, client.Client) error) finalizationFunction {
+	return fn
+}
+
+type initializationFunction func(context.Context, client.Client, client.Object) error
+
+func (fn initializationFunction) applyToLifecycleOptions(opts *lifecycleOptions) {
+	opts.initializationLogic = append(opts.initializationLogic, fn)
+}
+
+// WithInitializationFunc can be used to provide functions that run resource initialization, like for example
+// applying defaults or labels to the resource.
+func WithInitializationFunc(fn func(context.Context, client.Client, client.Object) error) initializationFunction {
+	return fn
+}
+
+type inMemoryinitializationFunction func(context.Context, client.Client, client.Object) error
+
+func (fn inMemoryinitializationFunction) applyToLifecycleOptions(opts *lifecycleOptions) {
+	opts.inMemoryinitializationLogic = append(opts.inMemoryinitializationLogic, fn)
+}
+
+// WithInitializationFunc can be used to provide functions that run resource initialization, like for example
+// applying defaults or labels to the resource.
+func WithInMemoryInitializationFunc(fn func(context.Context, client.Client, client.Object) error) inMemoryinitializationFunction {
+	return fn
 }
 
 // Reconciler computes a list of resources that it needs to keep in place
 type Reconciler struct {
 	client.Client
-	Scheme *runtime.Scheme
+	Log         logr.Logger
+	Scheme      *runtime.Scheme
+	typeTracker typeTracker
 }
 
-func NewFromManager(mgr manager.Manager) Reconciler {
-	return Reconciler{Client: mgr.GetClient(), Scheme: mgr.GetScheme()}
+// NewFromManager returns a new Reconciler from a controller-runtime manager.Manager
+func NewFromManager(mgr manager.Manager) *Reconciler {
+	return &Reconciler{Client: mgr.GetClient(), Scheme: mgr.GetScheme(), Log: logr.Discard()}
 }
 
-// GetInstance tries to retrieve the custom resource instance and perform some standard
-// tasks like initialization and cleanup when required.
-func (r *Reconciler) GetInstance(ctx context.Context, key types.NamespacedName,
-	instance client.Object, finalizer *string, cleanupFns []func()) (*ctrl.Result, error) {
-	logger := log.FromContext(ctx)
+// WithLogger sets the Reconciler logger
+func (r *Reconciler) WithLogger(logger logr.Logger) *Reconciler {
+	r.Log = logger
+	return r
+}
 
-	err := r.Client.Get(ctx, key, instance)
+// Logger returns the Reconciler logger and a copy of the context that also includes the logger inside to pass it around easily.
+func (r *Reconciler) Logger(ctx context.Context, keysAndValues ...interface{}) (context.Context, logr.Logger) {
+	var logger logr.Logger
+	if !r.Log.IsZero() {
+		// get the logger configured in the Reconciler
+		logger = r.Log.WithValues(keysAndValues...)
+	} else {
+		// try to get a logger from the context
+		logger = logr.FromContextOrDiscard(ctx).WithValues(keysAndValues...)
+	}
+	return logr.NewContext(ctx, logger), logger
+}
+
+// ManageResourceLifecycle manages the lifecycle of the resource, from initialization to
+// finalization and deletion.
+// The behaviour can be modified depending on the options passed to the function:
+//   - WithInitializationFunc(...): pass a function with initialization logic for the custom resource.
+//     The function will be executed and if changes to the custom resource are detected the resource will
+//     be updated. It can be used to set default values on the custom resource. Can be used more than once.
+//   - WithInMemoryInitializationFunc(...): pass a function with initialization logic to the custom resource.
+//     If the custom resource is modified in nay way, the changes won't be persisted in the API server and will
+//     only have effect within the reconcile loop. Can be used more than once.
+//   - WithFinalizer(...): passes a string that will be configured as a resource finalizar, ensuring that the
+//     custom resource has the finalizer in place, updating it if required.
+//   - WithFinalizationFunc(...): pass finalization functions that will be
+//     run when the custom resource is being deleted. Only works ifa finalizer is also passed, otherwise
+//     the custom resource will be immediately deleted and the functions won't run. Can be used more than once.
+func (r *Reconciler) ManageResourceLifecycle(ctx context.Context, req reconcile.Request, obj client.Object,
+	opts ...lifecycleOption) Result {
+
+	options := newLifecycleOptions()
+	for _, o := range opts {
+		o.applyToLifecycleOptions(options)
+	}
+
+	ctx, logger := r.Logger(ctx)
+	err := r.Client.Get(ctx, types.NamespacedName{Name: req.Name, Namespace: req.Namespace}, obj)
 	if err != nil {
 		if errors.IsNotFound(err) {
 			// Return and don't requeue
-			return &ctrl.Result{}, nil
+			return Result{Action: ReturnAction}
 		}
-		return &ctrl.Result{}, err
+		return Result{Error: err}
 	}
 
-	if util.IsBeingDeleted(instance) {
+	if util.IsBeingDeleted(obj) {
 
 		// finalizer logic is only triggered if the controller
-		// sets a finalizer, otherwise there's notihng to be done
-		if finalizer != nil {
+		// sets a finalizer and the finalizer is still present in the
+		// resource
+		if options.finalizer != nil && controllerutil.ContainsFinalizer(obj, *options.finalizer) {
 
-			if !controllerutil.ContainsFinalizer(instance, *finalizer) {
-				return &ctrl.Result{}, nil
-			}
-			err := r.ManageCleanupLogic(instance, cleanupFns, logger)
+			err := r.finalize(ctx, options.finalizationLogic, logger)
 			if err != nil {
 				logger.Error(err, "unable to delete instance")
-				result, err := ctrl.Result{}, err
-				return &result, err
+				return Result{Error: err}
 			}
-			controllerutil.RemoveFinalizer(instance, *finalizer)
-			err = r.Client.Update(ctx, instance)
+			controllerutil.RemoveFinalizer(obj, *options.finalizer)
+			err = r.Client.Update(ctx, obj)
 			if err != nil {
 				logger.Error(err, "unable to update instance")
-				result, err := ctrl.Result{}, err
-				return &result, err
+				return Result{Error: err}
 			}
 
 		}
-		return &ctrl.Result{}, nil
+		// object being deleted, return without doing anything
+		// and stop the reconcile loop
+		return Result{Action: ReturnAction}
 	}
 
-	if ok := r.IsInitialized(instance, finalizer); !ok {
-		err := r.Client.Update(ctx, instance)
+	ok, err := r.isInitialized(ctx, obj, options.initializationLogic)
+	if err != nil {
+		return Result{Error: err}
+	}
+	if !ok {
+		err := r.Client.Update(ctx, obj)
 		if err != nil {
 			logger.Error(err, "unable to initialize instance")
-			result, err := ctrl.Result{}, err
-			return &result, err
+			return Result{Error: err}
 		}
-		return &ctrl.Result{}, nil
-	}
-	return nil, nil
-}
-
-// IsInitialized can be used to check if instance is correctly initialized.
-// Returns false if it isn't.
-func (r *Reconciler) IsInitialized(instance client.Object, finalizer *string) bool {
-	ok := true
-	if finalizer != nil && !controllerutil.ContainsFinalizer(instance, *finalizer) {
-		controllerutil.AddFinalizer(instance, *finalizer)
-		ok = false
+		return Result{Action: ReturnAndRequeueAction}
 	}
 
-	return ok
+	if err := r.inMemoryInitialization(ctx, obj, options.inMemoryinitializationLogic); err != nil {
+		return Result{Error: err}
+	}
+
+	return Result{Action: ContinueAction}
 }
 
-// ManageCleanupLogic contains finalization logic for the LockedResourcesReconciler
-// Functionality can be extended by passing extra cleanup functions
-func (r *Reconciler) ManageCleanupLogic(instance client.Object, fns []func(), log logr.Logger) error {
+// isInitialized can be used to check if instance is correctly initialized.
+// Returns false if it isn't and an update is required.
+func (r *Reconciler) isInitialized(ctx context.Context, obj client.Object, fns []initializationFunction) (bool, error) {
+	orig := obj.DeepCopyObject()
+	for _, fn := range fns {
+		err := fn(ctx, r.Client, obj)
+		if err != nil {
+			return false, err
+		}
+	}
 
+	if !equality.Semantic.DeepEqual(orig, obj) {
+		return false, nil
+	}
+
+	return true, nil
+}
+
+// inMemoryInitialization can be used to perform initializarion on the resource that is not
+// persisted in the API storage. This can be used to perform initialization on the resource without
+// writing it to the API to avoid surfacing it uo to the user. This approach is a bit more
+// gitops firendly as it avoids modifying the resource, but it doesn't provide any information
+// to the user on the initialization being used for reconciliation.
+func (r *Reconciler) inMemoryInitialization(ctx context.Context, obj client.Object, fns []inMemoryinitializationFunction) error {
+	for _, fn := range fns {
+		err := fn(ctx, r.Client, obj)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// finalize contains finalization logic for the Reconciler
+func (r *Reconciler) finalize(ctx context.Context, fns []finalizationFunction, log logr.Logger) error {
 	// Call any cleanup functions passed
 	for _, fn := range fns {
-		fn()
+		err := fn(ctx, r.Client)
+		if err != nil {
+			return err
+		}
 	}
-
 	return nil
 }
 
-// ReconcileOwnedResources handles generalized resource reconcile logic for
-// all controllers
-func (r *Reconciler) ReconcileOwnedResources(ctx context.Context, owner client.Object, resources []Resource) error {
-
+// ReconcileOwnedResources handles generalized resource reconcile logic for a controller:
+//
+//   - Takes a list of templates and calls resource.CreateOrUpdate on each one of them. The templates
+//     need to implement the resource.TemplateInterface interface. Users can take advantage of the generic
+//     resource.Template[T] struct that the resource package provides, which already implements the
+//     resource.TemplateInterface.
+//   - Each template is added to the list of managed resources if resource.CreateOrUpdate returns with no error
+//   - If the resource pruner is enabled any resource owned by the custom resource not present in the list of managed
+//     resources is deleted. The resource pruner must be enabled in the global config (see package config) and also not
+//     explicitely disabled in the resource by the '<annotations-domain>/prune: true/false' annotation.
+func (r *Reconciler) ReconcileOwnedResources(ctx context.Context, owner client.Object, list []resource.TemplateInterface) Result {
 	managedResources := []corev1.ObjectReference{}
 
-	for _, res := range resources {
-
-		object, err := res.Build(ctx, r.Client)
+	for _, template := range list {
+		ref, err := resource.CreateOrUpdate(ctx, r.Client, r.Scheme, owner, template)
 		if err != nil {
-			return err
+			return Result{Error: fmt.Errorf("unable to CreateOrUpdate resource: %w", err)}
 		}
-
-		if err := controllerutil.SetControllerReference(owner, object, r.Scheme); err != nil {
-			return err
-		}
-
-		if err := res.ResourceReconciler(ctx, r.Client, object); err != nil {
-			return err
-		}
-
-		managedResources = append(managedResources, corev1.ObjectReference{
-			Namespace: object.GetNamespace(),
-			Name:      object.GetName(),
-			Kind:      reflect.TypeOf(object).Elem().Name(),
-		})
-	}
-
-	if IsPrunerEnabled(owner) {
-		if err := r.PruneOrphaned(ctx, owner, managedResources); err != nil {
-			return err
+		if ref != nil {
+			managedResources = append(managedResources, *ref)
+			r.typeTracker.trackType(schema.FromAPIVersionAndKind(ref.APIVersion, ref.Kind))
 		}
 	}
 
-	return nil
+	if isPrunerEnabled(owner) {
+		if err := r.pruneOrphaned(ctx, owner, managedResources); err != nil {
+
+			return Result{Error: fmt.Errorf("unable to prune orphaned resources: %w", err)}
+		}
+	}
+
+	return Result{Action: ContinueAction}
 }
 
-func IsPrunerEnabled(owner client.Object) bool {
-	// prune is active by default
-	prune := true
+// FilteredEventHandler returns an EventHandler for the specific client.ObjectList
+// passed as parameter. It will produce reconcile requests for any client.Object of the
+// given type that returns true when passed to the filter function. If the filter function
+// is "nil" all the listed object will receive a reconcile request.
+// The filter function receives both the object that generated the event and the object that
+// might need to be reconciled in response to that event. Depending on whether it returns true
+// or false the reconciler request will be generated or not.
+//
+// In the following example, a watch for Secret resources which match the name "secret" is added
+// to the reconciler. The watch will generate reconmcile requests for v1alpha1.Test resources
+// any time a Secret with name "secret" is created/uddated/deleted
+//
+//	func (r *Reconciler) SetupWithManager(mgr ctrl.Manager) error {
+//		return ctrl.NewControllerManagedBy(mgr).
+//			For(&v1alpha1.Test{}).
+//			Watches(&source.Kind{Type: &corev1.Secret{TypeMeta: metav1.TypeMeta{Kind: "Secret"}}},
+//				r.FilteredEventHandler(
+//					&v1alpha1.TestList{},
+//					func(event, o client.Object) bool {
+//						return event.GetName() == "secret"
+//					},
+//					r.Log)).
+//			Complete(r)
+//	}
+func (r *Reconciler) FilteredEventHandler(ol client.ObjectList,
+	filter func(event client.Object, o client.Object) bool, logger logr.Logger) handler.EventHandler {
 
-	// get the per resource switch (annotation)
-	if value, ok := owner.GetAnnotations()[fmt.Sprintf("%s/prune", Config.AnnotationsDomain)]; ok {
-		var err error
-		prune, err = strconv.ParseBool(value)
-		if err != nil {
-			prune = true
-		}
-	}
-
-	return prune && Config.ResourcePruner
-}
-
-func (r *Reconciler) PruneOrphaned(ctx context.Context, owner client.Object, managed []corev1.ObjectReference) error {
-	logger := log.FromContext(ctx)
-
-	for _, lType := range Config.ManagedTypes {
-
-		err := r.Client.List(ctx, lType, client.InNamespace(owner.GetNamespace()))
-		if err != nil {
-			return err
-		}
-
-		for _, obj := range util.GetItems(lType) {
-
-			kind := reflect.TypeOf(obj).Elem().Name()
-			if isOwned(owner, obj) && !util.IsBeingDeleted(obj) && !isManaged(util.ObjectKey(obj), kind, managed) {
-
-				err := r.Client.Delete(ctx, obj)
-				if err != nil {
-					return err
-				}
-				logger.Info("resource deleted", "kind", reflect.TypeOf(obj).Elem().Name(), "resource", obj.GetName())
-			}
-		}
-	}
-	return nil
-}
-
-func isOwned(owner client.Object, owned client.Object) bool {
-	refs := owned.GetOwnerReferences()
-	for _, ref := range refs {
-		if ref.Kind == owner.GetObjectKind().GroupVersionKind().Kind && ref.Name == owner.GetName() {
-			return true
-		}
-	}
-	return false
-}
-
-func isManaged(key types.NamespacedName, kind string, managed []corev1.ObjectReference) bool {
-
-	for _, m := range managed {
-		if m.Name == key.Name && m.Namespace == key.Namespace && m.Kind == kind {
-			return true
-		}
-	}
-	return false
-}
-
-// SecretEventHandler returns an EventHandler for the specific client.ObjectList
-// list object passed as parameter
-func (r *Reconciler) SecretEventHandler(ol client.ObjectList, logger logr.Logger) handler.EventHandler {
 	return handler.EnqueueRequestsFromMapFunc(
-		func(o client.Object) []reconcile.Request {
+		func(event client.Object) []reconcile.Request {
 			if err := r.Client.List(context.TODO(), ol); err != nil {
 				logger.Error(err, "unable to retrieve the list of resources")
 				return []reconcile.Request{}
@@ -274,7 +348,16 @@ func (r *Reconciler) SecretEventHandler(ol client.ObjectList, logger logr.Logger
 				return []reconcile.Request{}
 			}
 
-			return []reconcile.Request{{NamespacedName: util.ObjectKey(items[0])}}
+			req := make([]reconcile.Request, 0, len(items))
+			for _, item := range items {
+				if filter != nil {
+					if !filter(event, item) {
+						continue
+					}
+				}
+				req = append(req, reconcile.Request{NamespacedName: client.ObjectKeyFromObject(item)})
+			}
+			return req
 		},
 	)
 }

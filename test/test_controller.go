@@ -18,15 +18,12 @@ package test
 
 import (
 	"context"
-	"time"
 
+	"github.com/3scale-ops/basereconciler/mutators"
 	"github.com/3scale-ops/basereconciler/reconciler"
-	"github.com/3scale-ops/basereconciler/resources"
+	"github.com/3scale-ops/basereconciler/resource"
 	"github.com/3scale-ops/basereconciler/test/api/v1alpha1"
-	externalsecretsv1beta1 "github.com/external-secrets/external-secrets/apis/externalsecrets/v1beta1"
-	"github.com/go-logr/logr"
-	grafanav1alpha1 "github.com/grafana-operator/grafana-operator/v4/api/integreatly/v1alpha1"
-	monitoringv1 "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
+	"github.com/3scale-ops/basereconciler/util"
 	appsv1 "k8s.io/api/apps/v1"
 	autoscalingv2 "k8s.io/api/autoscaling/v2"
 	corev1 "k8s.io/api/core/v1"
@@ -36,89 +33,128 @@ import (
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/utils/pointer"
 	ctrl "sigs.k8s.io/controller-runtime"
-	"sigs.k8s.io/controller-runtime/pkg/log"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/source"
 )
-
-func init() {
-	reconciler.Config.AnnotationsDomain = "example.com"
-	reconciler.Config.ResourcePruner = true
-	reconciler.Config.ManagedTypes = reconciler.NewManagedTypes().
-		Register(&corev1.ServiceList{}).
-		Register(&appsv1.DeploymentList{}).
-		Register(&externalsecretsv1beta1.ExternalSecretList{}).
-		Register(&grafanav1alpha1.GrafanaDashboardList{}).
-		Register(&autoscalingv2.HorizontalPodAutoscalerList{}).
-		Register(&policyv1.PodDisruptionBudgetList{}).
-		Register(&monitoringv1.PodMonitorList{})
-}
 
 // Reconciler reconciles a Test object
 // +kubebuilder:object:generate=false
 type Reconciler struct {
-	reconciler.Reconciler
-	Log logr.Logger
+	*reconciler.Reconciler
 }
 
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
 // move the current state of the cluster closer to the desired state.
 func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	logger := r.Log.WithValues("name", req.Name, "namespace", req.Namespace)
-	ctx = log.IntoContext(ctx, logger)
 
-	instance := &v1alpha1.Test{}
-	key := types.NamespacedName{Name: req.Name, Namespace: req.Namespace}
-	result, err := r.GetInstance(ctx, key, instance, nil, nil)
-	if result != nil || err != nil {
-		return *result, err
+	ctx, _ = r.Logger(ctx, "name", req.Name, "namespace", req.Namespace)
+	obj := &v1alpha1.Test{}
+	result := r.ManageResourceLifecycle(ctx, req, obj,
+		reconciler.WithInitializationFunc(util.ResourceDefaulter(obj)),
+		reconciler.WithFinalizer("finalizer"),
+		// create a configmap when the custom resource is deleted
+		reconciler.WithFinalizationFunc(func(context.Context, client.Client) error {
+			cm := &corev1.ConfigMap{
+				ObjectMeta: metav1.ObjectMeta{Name: "cm", Namespace: req.Namespace},
+				Data:       map[string]string{"removed": "yes"},
+			}
+			err := r.Client.Create(ctx, cm)
+			if err != nil {
+				return err
+			}
+			return nil
+		}),
+	)
+	if result.ShouldReturn() {
+		return result.Values()
 	}
 
-	err = r.ReconcileOwnedResources(ctx, instance, []reconciler.Resource{
-		resources.DeploymentTemplate{
-			Template: deployment(req.Namespace),
-			RolloutTriggers: []resources.RolloutTrigger{{
-				Name:       "secret",
-				SecretName: pointer.String("secret"),
-			}},
-			EnforceReplicas: true,
+	resources := []resource.TemplateInterface{
+		&resource.Template[*appsv1.Deployment]{
+			TemplateBuilder: deployment(req.Namespace),
 			IsEnabled:       true,
+			EnsureProperties: []resource.Property{
+				"metadata.annotations",
+				"metadata.labels",
+				"spec.minReadySeconds",
+				"spec.replicas",
+				"spec.selector",
+				"spec.strategy",
+				"spec.template.metadata",
+				"spec.template.spec",
+			},
+			IgnoreProperties: []resource.Property{
+				"metadata.annotations['deployment.kubernetes.io/revision']",
+				"spec.template.spec.dnsPolicy",
+				"spec.template.spec.schedulerName",
+				"spec.template.spec.restartPolicy",
+				"spec.template.spec.securityContext",
+				"spec.template.spec.terminationGracePeriodSeconds",
+				"spec.template.spec.containers[*].terminationMessagePath",
+				"spec.template.spec.containers[*].terminationMessagePolicy",
+			},
+			TemplateMutations: []resource.TemplateMutationFunction{
+				mutators.SetDeploymentReplicas(true),
+				mutators.RolloutTrigger{
+					Name:       "secret",
+					SecretName: pointer.String("secret"),
+				}.Add("example.com"),
+			},
 		},
-		resources.ExternalSecretTemplate{
-			Template:  externalSecret(req.Namespace),
-			IsEnabled: true,
-		},
-		resources.ServiceTemplate{
-			Template:  service(req.Namespace, instance.Spec.ServiceAnnotations),
-			IsEnabled: true,
-		},
-		resources.PodDisruptionBudgetTemplate{
-			Template:  pdb(req.Namespace),
-			IsEnabled: instance.Spec.PDB != nil && *instance.Spec.PDB,
-		},
-		resources.HorizontalPodAutoscalerTemplate{
-			Template:  hpa(req.Namespace),
-			IsEnabled: instance.Spec.HPA != nil && *instance.Spec.HPA,
-		},
-		resources.PodMonitorTemplate{
-			Template:  podmonitor(req.Namespace),
-			IsEnabled: instance.Spec.HPA != nil && *instance.Spec.HPA,
-		},
-		resources.GrafanaDashboardTemplate{
-			Template:  dashboard(req.Namespace),
-			IsEnabled: instance.Spec.HPA != nil && *instance.Spec.HPA,
-		},
-	})
 
-	if err != nil {
-		logger.Error(err, "unable to reconcile owned resources")
-		return ctrl.Result{}, err
+		&resource.Template[*autoscalingv2.HorizontalPodAutoscaler]{
+			TemplateBuilder: hpa(req.Namespace),
+			IsEnabled:       obj.Spec.HPA != nil && *obj.Spec.HPA,
+			EnsureProperties: []resource.Property{
+				"metadata.annotations",
+				"metadata.labels",
+				"spec.scaleTargetRef",
+				"spec.minReplicas",
+				"spec.maxReplicas",
+				"spec.metrics",
+			},
+		},
+		&resource.Template[*policyv1.PodDisruptionBudget]{
+			TemplateBuilder: pdb(req.Namespace),
+			IsEnabled:       obj.Spec.PDB != nil && *obj.Spec.PDB,
+			EnsureProperties: []resource.Property{
+				"metadata.annotations",
+				"metadata.labels",
+				"spec.maxUnavailable",
+				"spec.minAvailable",
+				"spec.selector",
+			},
+		},
+	}
+
+	if obj.Spec.PruneService == nil || !*obj.Spec.PruneService {
+		resources = append(resources, &resource.Template[*corev1.Service]{
+			TemplateBuilder: service(req.Namespace, obj.Spec.ServiceAnnotations),
+			IsEnabled:       true,
+			EnsureProperties: []resource.Property{
+				"metadata.annotations",
+				"metadata.labels",
+				"spec.type",
+				"spec.selector",
+				"spec.ports",
+				"spec.clusterIP",
+			},
+			TemplateMutations: []resource.TemplateMutationFunction{
+				mutators.SetServiceLiveValues(),
+			},
+		})
+	}
+
+	result = r.ReconcileOwnedResources(ctx, obj, resources)
+	if result.ShouldReturn() {
+		return result.Values()
 	}
 
 	// reconcile the status
-	err = r.ReconcileStatus(ctx, instance,
-		[]types.NamespacedName{{Name: "deployment", Namespace: instance.GetNamespace()}}, nil)
-	if err != nil {
-		return ctrl.Result{}, err
+	result = r.ReconcileStatus(ctx, obj,
+		[]types.NamespacedName{{Name: "deployment", Namespace: obj.GetNamespace()}}, nil)
+	if result.ShouldReturn() {
+		return result.Values()
 	}
 
 	return ctrl.Result{}, nil
@@ -132,14 +168,18 @@ func (r *Reconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Owns(&corev1.Service{}).
 		Owns(&policyv1.PodDisruptionBudget{}).
 		Owns(&autoscalingv2.HorizontalPodAutoscaler{}).
-		Owns(&externalsecretsv1beta1.ExternalSecret{}).
 		Watches(&source.Kind{Type: &corev1.Secret{TypeMeta: metav1.TypeMeta{Kind: "Secret"}}},
-			r.SecretEventHandler(&v1alpha1.TestList{}, r.Log)).
+			r.FilteredEventHandler(
+				&v1alpha1.TestList{},
+				func(event, o client.Object) bool {
+					return event.GetName() == "secret"
+				},
+				r.Log)).
 		Complete(r)
 }
 
-func deployment(namespace string) func() *appsv1.Deployment {
-	return func() *appsv1.Deployment {
+func deployment(namespace string) resource.TemplateBuilderFunction[*appsv1.Deployment] {
+	return func(client.Object) (*appsv1.Deployment, error) {
 		dep := &appsv1.Deployment{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "deployment",
@@ -147,6 +187,12 @@ func deployment(namespace string) func() *appsv1.Deployment {
 			},
 			Spec: appsv1.DeploymentSpec{
 				Replicas: pointer.Int32(1),
+				Strategy: appsv1.DeploymentStrategy{
+					Type: appsv1.RollingUpdateDeploymentStrategyType,
+					RollingUpdate: &appsv1.RollingUpdateDeployment{
+						MaxSurge:       util.Pointer(intstr.FromString("25%")),
+						MaxUnavailable: util.Pointer(intstr.FromString("25%"))},
+				},
 				Selector: &metav1.LabelSelector{
 					MatchLabels: map[string]string{"selector": "deployment"},
 				},
@@ -157,9 +203,10 @@ func deployment(namespace string) func() *appsv1.Deployment {
 					Spec: corev1.PodSpec{
 						Containers: []corev1.Container{
 							{
-								Name:      "container",
-								Image:     "example.com:latest",
-								Resources: corev1.ResourceRequirements{},
+								Name:            "container",
+								Image:           "example.com:latest",
+								ImagePullPolicy: corev1.PullAlways,
+								Resources:       corev1.ResourceRequirements{},
 							},
 						},
 					},
@@ -167,12 +214,12 @@ func deployment(namespace string) func() *appsv1.Deployment {
 			},
 		}
 
-		return dep
+		return dep, nil
 	}
 }
 
-func service(namespace string, annotations map[string]string) func() *corev1.Service {
-	return func() *corev1.Service {
+func service(namespace string, annotations map[string]string) resource.TemplateBuilderFunction[*corev1.Service] {
+	return func(client.Object) (*corev1.Service, error) {
 		return &corev1.Service{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:        "service",
@@ -180,45 +227,17 @@ func service(namespace string, annotations map[string]string) func() *corev1.Ser
 				Annotations: annotations,
 			},
 			Spec: corev1.ServiceSpec{
-				Type:                  corev1.ServiceTypeLoadBalancer,
-				ExternalTrafficPolicy: corev1.ServiceExternalTrafficPolicyTypeCluster,
-				SessionAffinity:       corev1.ServiceAffinityNone,
+				Type: corev1.ServiceTypeClusterIP,
 				Ports: []corev1.ServicePort{{
 					Name: "port", Port: 80, TargetPort: intstr.FromInt(80), Protocol: corev1.ProtocolTCP}},
 				Selector: map[string]string{"selector": "deployment"},
 			},
-		}
+		}, nil
 	}
 }
 
-func externalSecret(namespace string) func() *externalsecretsv1beta1.ExternalSecret {
-
-	return func() *externalsecretsv1beta1.ExternalSecret {
-		return &externalsecretsv1beta1.ExternalSecret{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      "secret",
-				Namespace: namespace,
-			},
-			Spec: externalsecretsv1beta1.ExternalSecretSpec{
-				SecretStoreRef:  externalsecretsv1beta1.SecretStoreRef{Name: "vault-mgmt", Kind: "ClusterSecretStore"},
-				Target:          externalsecretsv1beta1.ExternalSecretTarget{Name: "secret"},
-				RefreshInterval: &metav1.Duration{Duration: 60 * time.Second},
-				Data: []externalsecretsv1beta1.ExternalSecretData{
-					{
-						SecretKey: "KEY",
-						RemoteRef: externalsecretsv1beta1.ExternalSecretDataRemoteRef{
-							Key:      "vault-path",
-							Property: "vault-key",
-						},
-					},
-				},
-			},
-		}
-	}
-}
-
-func hpa(namespace string) func() *autoscalingv2.HorizontalPodAutoscaler {
-	return func() *autoscalingv2.HorizontalPodAutoscaler {
+func hpa(namespace string) resource.TemplateBuilderFunction[*autoscalingv2.HorizontalPodAutoscaler] {
+	return func(client.Object) (*autoscalingv2.HorizontalPodAutoscaler, error) {
 		return &autoscalingv2.HorizontalPodAutoscaler{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "hpa",
@@ -232,13 +251,23 @@ func hpa(namespace string) func() *autoscalingv2.HorizontalPodAutoscaler {
 				},
 				MinReplicas: pointer.Int32(1),
 				MaxReplicas: 1,
+				Metrics: []autoscalingv2.MetricSpec{{
+					Type: autoscalingv2.ResourceMetricSourceType,
+					Resource: &autoscalingv2.ResourceMetricSource{
+						Name: "cpu",
+						Target: autoscalingv2.MetricTarget{
+							Type:               autoscalingv2.UtilizationMetricType,
+							AverageUtilization: util.Pointer(int32(90)),
+						},
+					},
+				}},
 			},
-		}
+		}, nil
 	}
 }
 
-func pdb(namespace string) func() *policyv1.PodDisruptionBudget {
-	return func() *policyv1.PodDisruptionBudget {
+func pdb(namespace string) resource.TemplateBuilderFunction[*policyv1.PodDisruptionBudget] {
+	return func(client.Object) (*policyv1.PodDisruptionBudget, error) {
 
 		return &policyv1.PodDisruptionBudget{
 			ObjectMeta: metav1.ObjectMeta{
@@ -251,40 +280,6 @@ func pdb(namespace string) func() *policyv1.PodDisruptionBudget {
 				},
 				MinAvailable: intstr.ValueOrDefault(nil, intstr.FromInt(1)),
 			},
-		}
-	}
-}
-
-func podmonitor(namespace string) func() *monitoringv1.PodMonitor {
-	return func() *monitoringv1.PodMonitor {
-
-		return &monitoringv1.PodMonitor{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      "pm",
-				Namespace: namespace,
-			},
-			Spec: monitoringv1.PodMonitorSpec{
-				JobLabel:            "job",
-				PodMetricsEndpoints: []monitoringv1.PodMetricsEndpoint{},
-				Selector: metav1.LabelSelector{
-					MatchLabels: map[string]string{"selector": "deployment"},
-				},
-			},
-		}
-	}
-}
-
-func dashboard(namespace string) func() *grafanav1alpha1.GrafanaDashboard {
-	return func() *grafanav1alpha1.GrafanaDashboard {
-
-		return &grafanav1alpha1.GrafanaDashboard{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      "dashboard",
-				Namespace: namespace,
-			},
-			Spec: grafanav1alpha1.GrafanaDashboardSpec{
-				Json: "{}",
-			},
-		}
+		}, nil
 	}
 }

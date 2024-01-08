@@ -1,11 +1,13 @@
-package resources
+package mutators
 
 import (
 	"context"
 	"reflect"
 	"testing"
 
-	"github.com/go-test/deep"
+	"github.com/3scale-ops/basereconciler/util"
+	"github.com/google/go-cmp/cmp"
+	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
@@ -14,11 +16,96 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 )
 
-func Test_populateServiceSpecRuntimeValues(t *testing.T) {
+func TestSetDeploymentReplicas(t *testing.T) {
 	type args struct {
-		ctx context.Context
-		cl  client.Client
-		svc *corev1.Service
+		enforce bool
+		ctx     context.Context
+		cl      client.Client
+		desired *appsv1.Deployment
+	}
+	tests := []struct {
+		name    string
+		args    args
+		want    *appsv1.Deployment
+		wantErr bool
+	}{
+		{
+			name: "Enforces number of replicas",
+			args: args{
+				enforce: true,
+				ctx:     context.TODO(),
+				cl: fake.NewClientBuilder().WithScheme(scheme.Scheme).WithObjects(
+					&appsv1.Deployment{
+						ObjectMeta: metav1.ObjectMeta{Name: "deployment", Namespace: "ns"},
+						Spec:       appsv1.DeploymentSpec{Replicas: util.Pointer[int32](10)},
+					}).Build(),
+				desired: &appsv1.Deployment{
+					ObjectMeta: metav1.ObjectMeta{Name: "deployment", Namespace: "ns"},
+					Spec:       appsv1.DeploymentSpec{Replicas: util.Pointer[int32](2)},
+				},
+			},
+			want: &appsv1.Deployment{
+				ObjectMeta: metav1.ObjectMeta{Name: "deployment", Namespace: "ns"},
+				Spec:       appsv1.DeploymentSpec{Replicas: util.Pointer[int32](2)},
+			},
+			wantErr: false,
+		},
+		{
+			name: "Sets live replicas in template",
+			args: args{
+				enforce: false,
+				ctx:     context.TODO(),
+				cl: fake.NewClientBuilder().WithScheme(scheme.Scheme).WithObjects(
+					&appsv1.Deployment{
+						ObjectMeta: metav1.ObjectMeta{Name: "deployment", Namespace: "ns"},
+						Spec:       appsv1.DeploymentSpec{Replicas: util.Pointer[int32](10)},
+					}).Build(),
+				desired: &appsv1.Deployment{
+					ObjectMeta: metav1.ObjectMeta{Name: "deployment", Namespace: "ns"},
+					Spec:       appsv1.DeploymentSpec{Replicas: util.Pointer[int32](2)},
+				},
+			},
+			want: &appsv1.Deployment{
+				ObjectMeta: metav1.ObjectMeta{Name: "deployment", Namespace: "ns"},
+				Spec:       appsv1.DeploymentSpec{Replicas: util.Pointer[int32](10)},
+			},
+			wantErr: false,
+		},
+		{
+			name: "No error if deployment not found",
+			args: args{
+				enforce: false,
+				ctx:     context.TODO(),
+				cl:      fake.NewClientBuilder().WithScheme(scheme.Scheme).Build(),
+				desired: &appsv1.Deployment{
+					ObjectMeta: metav1.ObjectMeta{Name: "deployment", Namespace: "ns"},
+					Spec:       appsv1.DeploymentSpec{Replicas: util.Pointer[int32](2)},
+				},
+			},
+			want: &appsv1.Deployment{
+				ObjectMeta: metav1.ObjectMeta{Name: "deployment", Namespace: "ns"},
+				Spec:       appsv1.DeploymentSpec{Replicas: util.Pointer[int32](2)},
+			},
+			wantErr: false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if err := SetDeploymentReplicas(tt.args.enforce)(tt.args.ctx, tt.args.cl, tt.args.desired); (err != nil) != tt.wantErr {
+				t.Errorf("SetDeploymentReplicas() error = %v, wantErr %v", err, tt.wantErr)
+			}
+			if diff := cmp.Diff(tt.args.desired, tt.want); len(diff) > 0 {
+				t.Errorf("SetDeploymentReplicas() = diff %s", diff)
+			}
+		})
+	}
+}
+
+func Test_SetServiceLiveValues(t *testing.T) {
+	type args struct {
+		ctx     context.Context
+		cl      client.Client
+		desired *corev1.Service
 	}
 	tests := []struct {
 		name    string
@@ -37,18 +124,13 @@ func Test_populateServiceSpecRuntimeValues(t *testing.T) {
 						},
 						Spec: corev1.ServiceSpec{
 							Type:       corev1.ServiceTypeLoadBalancer,
-							IPFamilies: []corev1.IPFamily{corev1.IPv4Protocol},
-							IPFamilyPolicy: func() *corev1.IPFamilyPolicyType {
-								f := corev1.IPFamilyPolicySingleStack
-								return &f
-							}(),
 							ClusterIP:  "1.1.1.1",
 							ClusterIPs: []string{"1.1.1.1"},
 							Ports: []corev1.ServicePort{{
 								Name: "port", Port: 80, TargetPort: intstr.FromInt(80), Protocol: corev1.ProtocolTCP, NodePort: 3333}},
 						},
 					}).Build(),
-				svc: &corev1.Service{
+				desired: &corev1.Service{
 					ObjectMeta: metav1.ObjectMeta{Name: "service", Namespace: "ns"},
 					Spec: corev1.ServiceSpec{
 						Type: corev1.ServiceTypeLoadBalancer,
@@ -63,11 +145,6 @@ func Test_populateServiceSpecRuntimeValues(t *testing.T) {
 				},
 				Spec: corev1.ServiceSpec{
 					Type:       corev1.ServiceTypeLoadBalancer,
-					IPFamilies: []corev1.IPFamily{corev1.IPv4Protocol},
-					IPFamilyPolicy: func() *corev1.IPFamilyPolicyType {
-						f := corev1.IPFamilyPolicySingleStack
-						return &f
-					}(),
 					ClusterIP:  "1.1.1.1",
 					ClusterIPs: []string{"1.1.1.1"},
 					Ports: []corev1.ServicePort{{
@@ -87,18 +164,13 @@ func Test_populateServiceSpecRuntimeValues(t *testing.T) {
 						},
 						Spec: corev1.ServiceSpec{
 							Type:       corev1.ServiceTypeLoadBalancer,
-							IPFamilies: []corev1.IPFamily{corev1.IPv4Protocol},
-							IPFamilyPolicy: func() *corev1.IPFamilyPolicyType {
-								f := corev1.IPFamilyPolicySingleStack
-								return &f
-							}(),
 							ClusterIP:  "1.1.1.1",
 							ClusterIPs: []string{"1.1.1.1"},
 							Ports: []corev1.ServicePort{{
 								Name: "port", Port: 80, TargetPort: intstr.FromInt(80), Protocol: corev1.ProtocolTCP, NodePort: 3333}},
 						},
 					}).Build(),
-				svc: &corev1.Service{
+				desired: &corev1.Service{
 					ObjectMeta: metav1.ObjectMeta{Name: "service", Namespace: "ns"},
 					Spec: corev1.ServiceSpec{
 						Type: corev1.ServiceTypeLoadBalancer,
@@ -114,11 +186,6 @@ func Test_populateServiceSpecRuntimeValues(t *testing.T) {
 				},
 				Spec: corev1.ServiceSpec{
 					Type:       corev1.ServiceTypeLoadBalancer,
-					IPFamilies: []corev1.IPFamily{corev1.IPv4Protocol},
-					IPFamilyPolicy: func() *corev1.IPFamilyPolicyType {
-						f := corev1.IPFamilyPolicySingleStack
-						return &f
-					}(),
 					ClusterIP:  "1.1.1.1",
 					ClusterIPs: []string{"1.1.1.1"},
 					Ports: []corev1.ServicePort{
@@ -140,11 +207,6 @@ func Test_populateServiceSpecRuntimeValues(t *testing.T) {
 						},
 						Spec: corev1.ServiceSpec{
 							Type:       corev1.ServiceTypeLoadBalancer,
-							IPFamilies: []corev1.IPFamily{corev1.IPv4Protocol},
-							IPFamilyPolicy: func() *corev1.IPFamilyPolicyType {
-								f := corev1.IPFamilyPolicySingleStack
-								return &f
-							}(),
 							ClusterIP:  "1.1.1.1",
 							ClusterIPs: []string{"1.1.1.1"},
 							Ports: []corev1.ServicePort{
@@ -153,7 +215,7 @@ func Test_populateServiceSpecRuntimeValues(t *testing.T) {
 							},
 						},
 					}).Build(),
-				svc: &corev1.Service{
+				desired: &corev1.Service{
 					ObjectMeta: metav1.ObjectMeta{Name: "service", Namespace: "ns"},
 					Spec: corev1.ServiceSpec{
 						Type: corev1.ServiceTypeLoadBalancer,
@@ -168,11 +230,6 @@ func Test_populateServiceSpecRuntimeValues(t *testing.T) {
 				},
 				Spec: corev1.ServiceSpec{
 					Type:       corev1.ServiceTypeLoadBalancer,
-					IPFamilies: []corev1.IPFamily{corev1.IPv4Protocol},
-					IPFamilyPolicy: func() *corev1.IPFamilyPolicyType {
-						f := corev1.IPFamilyPolicySingleStack
-						return &f
-					}(),
 					ClusterIP:  "1.1.1.1",
 					ClusterIPs: []string{"1.1.1.1"},
 					Ports: []corev1.ServicePort{
@@ -193,18 +250,13 @@ func Test_populateServiceSpecRuntimeValues(t *testing.T) {
 						},
 						Spec: corev1.ServiceSpec{
 							Type:       corev1.ServiceTypeClusterIP,
-							IPFamilies: []corev1.IPFamily{corev1.IPv4Protocol},
-							IPFamilyPolicy: func() *corev1.IPFamilyPolicyType {
-								f := corev1.IPFamilyPolicySingleStack
-								return &f
-							}(),
 							ClusterIP:  "1.1.1.1",
 							ClusterIPs: []string{"1.1.1.1"},
 							Ports: []corev1.ServicePort{{
 								Name: "port", Port: 80, TargetPort: intstr.FromInt(80), Protocol: corev1.ProtocolTCP}},
 						},
 					}).Build(),
-				svc: &corev1.Service{
+				desired: &corev1.Service{
 					ObjectMeta: metav1.ObjectMeta{Name: "service", Namespace: "ns"},
 					Spec: corev1.ServiceSpec{
 						Type: corev1.ServiceTypeClusterIP,
@@ -219,11 +271,6 @@ func Test_populateServiceSpecRuntimeValues(t *testing.T) {
 				},
 				Spec: corev1.ServiceSpec{
 					Type:       corev1.ServiceTypeClusterIP,
-					IPFamilies: []corev1.IPFamily{corev1.IPv4Protocol},
-					IPFamilyPolicy: func() *corev1.IPFamilyPolicyType {
-						f := corev1.IPFamilyPolicySingleStack
-						return &f
-					}(),
 					ClusterIP:  "1.1.1.1",
 					ClusterIPs: []string{"1.1.1.1"},
 					Ports: []corev1.ServicePort{{
@@ -237,7 +284,7 @@ func Test_populateServiceSpecRuntimeValues(t *testing.T) {
 			args: args{
 				ctx: context.TODO(),
 				cl:  fake.NewClientBuilder().WithScheme(scheme.Scheme).Build(),
-				svc: &corev1.Service{
+				desired: &corev1.Service{
 					ObjectMeta: metav1.ObjectMeta{Name: "service", Namespace: "ns"},
 					Spec: corev1.ServiceSpec{
 						Type: corev1.ServiceTypeClusterIP,
@@ -261,12 +308,11 @@ func Test_populateServiceSpecRuntimeValues(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if err := populateServiceSpecRuntimeValues(tt.args.ctx, tt.args.cl, tt.args.svc); (err != nil) != tt.wantErr {
-				t.Errorf("populateServiceSpecRuntimeValues() error = %v, wantErr %v", err, tt.wantErr)
+			if err := SetServiceLiveValues()(tt.args.ctx, tt.args.cl, tt.args.desired); (err != nil) != tt.wantErr {
+				t.Errorf("SetServiceLiveValues() error = %v, wantErr %v", err, tt.wantErr)
 			}
-			if diff := deep.Equal(tt.args.svc, tt.want); len(diff) > 0 {
-				t.Errorf("populateServiceSpecRuntimeValues() = diff %s", diff)
-
+			if diff := cmp.Diff(tt.args.desired, tt.want); len(diff) > 0 {
+				t.Errorf("SetServiceLiveValues() = diff %s", diff)
 			}
 		})
 	}
@@ -283,7 +329,47 @@ func Test_findPort(t *testing.T) {
 		args args
 		want *corev1.ServicePort
 	}{
-		// TODO: Add test cases.
+		{
+			name: "Fount",
+			args: args{
+				pNumber:   80,
+				pProtocol: "TCP",
+				ports: []corev1.ServicePort{
+					{
+						Name:       "http",
+						Protocol:   "TCP",
+						Port:       80,
+						TargetPort: intstr.FromInt(8080),
+					},
+					{
+						Name:       "https",
+						Protocol:   "TCP",
+						Port:       443,
+						TargetPort: intstr.FromInt(8443),
+					},
+				},
+			},
+			want: &corev1.ServicePort{
+				Name:       "http",
+				Protocol:   "TCP",
+				Port:       80,
+				TargetPort: intstr.FromInt(8080),
+			},
+		},
+		{
+			name: "Not fount",
+			args: args{
+				pNumber:   80,
+				pProtocol: "TCP",
+				ports: []corev1.ServicePort{{
+					Name:       "https",
+					Protocol:   "TCP",
+					Port:       443,
+					TargetPort: intstr.FromInt(8443),
+				}},
+			},
+			want: nil,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
