@@ -134,6 +134,26 @@ var _ = Describe("Test controller", func() {
 			k8sClient.Delete(context.Background(), instance, client.PropagationPolicy(metav1.DeletePropagationForeground))
 		})
 
+		It("watches for changes in the owned resources", func() {
+			t := time.Now()
+			dep := resources[0].(*appsv1.Deployment)
+			err := k8sClient.Delete(context.Background(), dep,
+				client.PropagationPolicy(metav1.DeletePropagationForeground))
+			Expect(err).ToNot(HaveOccurred())
+
+			Eventually(func() bool {
+				err := k8sClient.Get(
+					context.Background(),
+					types.NamespacedName{Name: "deployment", Namespace: namespace},
+					dep,
+				)
+				if err != nil {
+					return false
+				}
+				return dep.GetCreationTimestamp().After(t)
+			}, timeout, poll).Should(BeTrue())
+		})
+
 		It("triggers a Deployment rollout on Secret contents change", func() {
 
 			dep := resources[0].(*appsv1.Deployment)

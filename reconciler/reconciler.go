@@ -288,6 +288,7 @@ func (r *Reconciler) finalize(ctx context.Context, fns []finalizationFunction, l
 //     explicitely disabled in the resource by the '<annotations-domain>/prune: true/false' annotation.
 func (r *Reconciler) ReconcileOwnedResources(ctx context.Context, owner client.Object, list []resource.TemplateInterface) Result {
 	managedResources := []corev1.ObjectReference{}
+	requeue := false
 
 	for _, template := range list {
 		ref, err := resource.CreateOrUpdate(ctx, r.Client, r.Scheme, owner, template)
@@ -296,7 +297,13 @@ func (r *Reconciler) ReconcileOwnedResources(ctx context.Context, owner client.O
 		}
 		if ref != nil {
 			managedResources = append(managedResources, *ref)
-			r.typeTracker.trackType(schema.FromAPIVersionAndKind(ref.APIVersion, ref.Kind))
+			gvk := schema.FromAPIVersionAndKind(ref.APIVersion, ref.Kind)
+			if changed := r.typeTracker.trackType(gvk); changed {
+				r.watchOwned(gvk, owner)
+				// requeue so we make sure we haven't lost any events related to the owned resource
+				// while the watch was not still up
+				requeue = true
+			}
 		}
 	}
 
@@ -307,7 +314,11 @@ func (r *Reconciler) ReconcileOwnedResources(ctx context.Context, owner client.O
 		}
 	}
 
-	return Result{Action: ContinueAction}
+	if requeue {
+		return Result{Action: ReturnAndRequeueAction}
+	} else {
+		return Result{Action: ContinueAction}
+	}
 }
 
 // FilteredEventHandler returns an EventHandler for the specific client.ObjectList

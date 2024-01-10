@@ -3,16 +3,13 @@ package reconciler
 import (
 	"context"
 	"fmt"
-	"reflect"
 	"strconv"
-	"sync"
 
 	"github.com/3scale-ops/basereconciler/config"
 	"github.com/3scale-ops/basereconciler/util"
 	"github.com/go-logr/logr"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/runtime/schema"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/apiutil"
 )
@@ -71,19 +68,4 @@ func isPrunerEnabled(owner client.Object) bool {
 		}
 	}
 	return prune && config.IsResourcePrunerEnabled()
-}
-
-type typeTracker struct {
-	seenTypes []schema.GroupVersionKind
-	mu        sync.Mutex
-}
-
-func (tt *typeTracker) trackType(gvk schema.GroupVersionKind) {
-	if !util.ContainsBy(tt.seenTypes, func(x schema.GroupVersionKind) bool {
-		return reflect.DeepEqual(x, gvk)
-	}) {
-		tt.mu.Lock()
-		defer tt.mu.Unlock()
-		tt.seenTypes = append(tt.seenTypes, gvk)
-	}
 }
