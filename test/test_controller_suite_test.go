@@ -134,6 +134,31 @@ var _ = Describe("Test controller", func() {
 			k8sClient.Delete(context.Background(), instance, client.PropagationPolicy(metav1.DeletePropagationForeground))
 		})
 
+		It("watches for changes in the owned resources and avoids drifts", func() {
+			dep := resources[0].(*appsv1.Deployment)
+			t := dep.GetCreationTimestamp()
+			GinkgoWriter.Printf("[debug] Creation timestamp: %v\n", t)
+			// ensure some time passes so the creation timestamps are different
+			time.Sleep(1 * time.Second)
+
+			By("deleting the owned Deployment")
+			err := k8sClient.Delete(context.Background(), dep)
+			Expect(err).ToNot(HaveOccurred())
+
+			Eventually(func() bool {
+				err := k8sClient.Get(
+					context.Background(),
+					types.NamespacedName{Name: "deployment", Namespace: namespace},
+					dep,
+				)
+				if err != nil {
+					return false
+				}
+				GinkgoWriter.Printf("[debug] Creation timestamp: %v\n", dep.GetCreationTimestamp())
+				return dep.GetCreationTimestamp().After(t.Time)
+			}, timeout, poll).Should(BeTrue())
+		})
+
 		It("triggers a Deployment rollout on Secret contents change", func() {
 
 			dep := resources[0].(*appsv1.Deployment)

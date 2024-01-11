@@ -50,7 +50,7 @@ func SetDeploymentReplicas(enforce bool) resource.TemplateMutationFunction {
 
 // SetServiceLiveValues retrieves some live values of the Service spec from the Kubernetes
 // API to avoid overwriting them. These values are typically set the by the kube-controller-manager
-// (in some rare occasions the user might explicitely set them) and should not be modified by the
+// (in some rare occasions the user might explicitly set them) and should not be modified by the
 // reconciler. The fields that this function keeps in sync with the live state are:
 //   - spec.clusterIP
 //   - spec.ClisterIPs

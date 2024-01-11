@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/3scale-ops/basereconciler/config"
 	"github.com/3scale-ops/basereconciler/resource"
 	"github.com/3scale-ops/basereconciler/util"
 	"github.com/go-logr/logr"
@@ -252,7 +253,7 @@ func (r *Reconciler) isInitialized(ctx context.Context, obj client.Object, fns [
 // inMemoryInitialization can be used to perform initializarion on the resource that is not
 // persisted in the API storage. This can be used to perform initialization on the resource without
 // writing it to the API to avoid surfacing it uo to the user. This approach is a bit more
-// gitops firendly as it avoids modifying the resource, but it doesn't provide any information
+// gitops friendly as it avoids modifying the resource, but it doesn't provide any information
 // to the user on the initialization being used for reconciliation.
 func (r *Reconciler) inMemoryInitialization(ctx context.Context, obj client.Object, fns []inMemoryinitializationFunction) error {
 	for _, fn := range fns {
@@ -285,9 +286,10 @@ func (r *Reconciler) finalize(ctx context.Context, fns []finalizationFunction, l
 //   - Each template is added to the list of managed resources if resource.CreateOrUpdate returns with no error
 //   - If the resource pruner is enabled any resource owned by the custom resource not present in the list of managed
 //     resources is deleted. The resource pruner must be enabled in the global config (see package config) and also not
-//     explicitely disabled in the resource by the '<annotations-domain>/prune: true/false' annotation.
+//     explicitly disabled in the resource by the '<annotations-domain>/prune: true/false' annotation.
 func (r *Reconciler) ReconcileOwnedResources(ctx context.Context, owner client.Object, list []resource.TemplateInterface) Result {
 	managedResources := []corev1.ObjectReference{}
+	requeue := false
 
 	for _, template := range list {
 		ref, err := resource.CreateOrUpdate(ctx, r.Client, r.Scheme, owner, template)
@@ -296,7 +298,13 @@ func (r *Reconciler) ReconcileOwnedResources(ctx context.Context, owner client.O
 		}
 		if ref != nil {
 			managedResources = append(managedResources, *ref)
-			r.typeTracker.trackType(schema.FromAPIVersionAndKind(ref.APIVersion, ref.Kind))
+			gvk := schema.FromAPIVersionAndKind(ref.APIVersion, ref.Kind)
+			if changed := r.typeTracker.trackType(gvk); changed && config.AreDynamicWatchesEnabled() {
+				r.watchOwned(gvk, owner)
+				// requeue so we make sure we haven't lost any events related to the owned resource
+				// while the watch was not still up
+				requeue = true
+			}
 		}
 	}
 
@@ -307,7 +315,11 @@ func (r *Reconciler) ReconcileOwnedResources(ctx context.Context, owner client.O
 		}
 	}
 
-	return Result{Action: ContinueAction}
+	if requeue {
+		return Result{Action: ReturnAndRequeueAction}
+	} else {
+		return Result{Action: ContinueAction}
+	}
 }
 
 // FilteredEventHandler returns an EventHandler for the specific client.ObjectList

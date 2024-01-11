@@ -37,7 +37,7 @@ type Template[T client.Object] struct {
 	// TemplateBuilder has been invoked, to perform mutations on the object that require
 	// access to a kubernetes API server.
 	TemplateMutations []TemplateMutationFunction
-	// IsEnabled specifies whether the resourse described by this Template should
+	// IsEnabled specifies whether the resource described by this Template should
 	// exist or not.
 	IsEnabled bool
 	// EnsureProperties are the properties from the desired object that should be enforced

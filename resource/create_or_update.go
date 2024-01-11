@@ -30,7 +30,7 @@ import (
 //   - owner: the object that owns the resource. Used to set the OwnerReference in the resource
 //   - template: the struct that describes how the resource needs to be reconciled. It must implement
 //     the TemplateInterface interface. When template.GetEnsureProperties is not set or an empty list, this
-//     function will lookup for configuration in the global configuration (see pacakge config).
+//     function will lookup for configuration in the global configuration (see package config).
 func CreateOrUpdate(ctx context.Context, cl client.Client, scheme *runtime.Scheme,
 	owner client.Object, template TemplateInterface) (*corev1.ObjectReference, error) {
 

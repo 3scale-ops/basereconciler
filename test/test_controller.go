@@ -162,20 +162,17 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 
 // SetupWithManager sets up the controller with the Manager.
 func (r *Reconciler) SetupWithManager(mgr ctrl.Manager) error {
-	return ctrl.NewControllerManagedBy(mgr).
-		For(&v1alpha1.Test{}).
-		Owns(&appsv1.Deployment{}).
-		Owns(&corev1.Service{}).
-		Owns(&policyv1.PodDisruptionBudget{}).
-		Owns(&autoscalingv2.HorizontalPodAutoscaler{}).
-		Watches(&source.Kind{Type: &corev1.Secret{TypeMeta: metav1.TypeMeta{Kind: "Secret"}}},
-			r.FilteredEventHandler(
-				&v1alpha1.TestList{},
-				func(event, o client.Object) bool {
-					return event.GetName() == "secret"
-				},
-				r.Log)).
-		Complete(r)
+	return reconciler.SetupWithDynamicTypeWatches(r,
+		ctrl.NewControllerManagedBy(mgr).
+			For(&v1alpha1.Test{}).
+			Watches(&source.Kind{Type: &corev1.Secret{TypeMeta: metav1.TypeMeta{Kind: "Secret"}}},
+				r.FilteredEventHandler(
+					&v1alpha1.TestList{},
+					func(event, o client.Object) bool {
+						return event.GetName() == "secret"
+					},
+					r.Log)),
+	)
 }
 
 func deployment(namespace string) resource.TemplateBuilderFunction[*appsv1.Deployment] {

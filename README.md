@@ -4,6 +4,7 @@ Basereconciler is an attempt to create a reconciler that can be imported and use
 At the moment basereconciler can perform the following tasks:
 
 * **Get the custom resource and perform some common tasks on it**:
+  * Management of initialization logic: custom initialization functions can be passed to perform initialization tasks on the custom resource. Initialization can be done persisting changes in the API server (use reconciler.WithInitializationFunc) or without persisting them (reconciler.WithInMemoryInitializationFunc).
   * Management of resource finalizer: some custom resources required more complex finalization logic. For this to happen a finalizer must be in place. Basereconciler can keep this finalizer in place and remove it when necessary during resource finalization.
   * Management of finalization logic: it checks if the resource is being finalized and executed the finalization logic passed to it if that is the case. When all finalization logic is completed it removes the finalizer on the custom resource.
 * **Reconcile resources owned by the custom resource**: basereconciler can keep the owned resources of a custom resource in it's desired state. It works for any resource type, and only requires that the user configures how each specific resource type has to be configured. The resource reconciler only works in "update mode" right now, so any operation to transition a given resource from its live state to its desired state will be an Update. We might add a "patch mode" in the future.
@@ -85,6 +86,11 @@ func (r *GuestbookReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 	// a finalization function that will casuse a log line to show when the resource is being deleted.
 	guestbook := &webappv1.Guestbook{}
 	result := r.ManageResourceLifecycle(ctx, req, guestbook,
+		reconciler.WithInitializationFunc(
+			func(context.Context, client.Client) error {
+				logger.Info("initializing resource")
+				return nil
+			}),
 		reconciler.WithFinalizer("guestbook-finalizer"),
 		reconciler.WithFinalizationFunc(
 			func(context.Context, client.Client) error {
@@ -140,13 +146,12 @@ func (r *GuestbookReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 }
 
 func (r *GuestbookReconciler) SetupWithManager(mgr ctrl.Manager) error {
-	return ctrl.NewControllerManagedBy(mgr).
-		For(&webappv1.Guestbook{}).
-		// add the watches for the specific resource types that the
-		// custom resource owns to watch for changes on those
-		Owns(&appsv1.Deployment{}).
-		Owns(&corev1.Service{}).
-		Complete(r)
+	// SetupWithDynamicTypeWatches will configure the controller to dynamically
+	// watch for any resource type that the controller owns.
+	return reconciler.SetupWithDynamicTypeWatches(r,
+		ctrl.NewControllerManagedBy(mgr).
+			For(&webappv1.Guestbook{}),
+	)
 }
 ```
 
