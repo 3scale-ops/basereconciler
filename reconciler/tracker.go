@@ -14,11 +14,26 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/source"
 )
 
+// ReconcilerWithTypeTracker is a reconciler with a TypeTracker
+// The type tracker is used by the "resource pruner" and "dynamic watches"
+// features
 type ReconcilerWithTypeTracker interface {
 	reconcile.Reconciler
 	BuildTypeTracker(ctrl controller.Controller)
 }
 
+// SetupWithDynamicTypeWatches is a helper to build a controller that can watch resource
+// types dynamically. It is typically used within the "SetupWithManager" function.
+// Example usage:
+//
+//	func (r *Reconciler) SetupWithManager(mgr ctrl.Manager) error {
+//		return reconciler.SetupWithDynamicTypeWatches(r,
+//			ctrl.NewControllerManagedBy(mgr).
+//				For(&v1alpha1.Test{}).
+//	            // add any other watches here
+//				Watches(...}.Watches(...),
+//		)
+//	}
 func SetupWithDynamicTypeWatches(r ReconcilerWithTypeTracker, bldr *builder.Builder) error {
 	ctrl, err := bldr.Build(r)
 	if err != nil {
@@ -60,7 +75,8 @@ func (r *Reconciler) watchOwned(gvk schema.GroupVersionKind, owner client.Object
 	return nil
 }
 
-// Reconciler is expected to be overwriten
+// BuildTypeTracker passes the controller to the reconciler so watches
+// can be added dynamically
 func (r *Reconciler) BuildTypeTracker(ctrl controller.Controller) {
 	r.typeTracker = typeTracker{
 		seenTypes: []schema.GroupVersionKind{},
