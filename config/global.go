@@ -17,10 +17,12 @@ type ReconcileConfigForGVK struct {
 var config = struct {
 	annotationsDomain              string
 	resourcePruner                 bool
+	dynamicWatches                 bool
 	defaultResourceReconcileConfig map[string]ReconcileConfigForGVK
 }{
 	annotationsDomain: "basereconciler.3cale.net",
 	resourcePruner:    true,
+	dynamicWatches:    true,
 	defaultResourceReconcileConfig: map[string]ReconcileConfigForGVK{
 		"*": {
 			EnsureProperties: []string{
@@ -55,6 +57,17 @@ func DisableResourcePruner() { config.resourcePruner = false }
 
 // IsResourcePrunerEnabled returs a boolean indicating wheter the resource pruner is enabled or not.
 func IsResourcePrunerEnabled() bool { return config.resourcePruner }
+
+// EnableDynamicWatches enables controller dynamic watches. Dynamic watches keep track of the resource
+// types that the controller owns and dynamically adds watches to the controller for those.
+func EnableDynamicWatches() { config.dynamicWatches = true }
+
+// DisableDynamicWatches disables controller dynamic watches. Dynamic watches keep track of the resource
+// types that the controller owns and dynamically adds watches to the controller for those.
+func DisableDynamicWatches() { config.dynamicWatches = false }
+
+// AreDynamicWatchesEnabled returs a boolean indicating wheter the dynamic watches are enabled or not.
+func AreDynamicWatchesEnabled() bool { return config.dynamicWatches }
 
 // GetDefaultReconcileConfigForGVK returns the default configuration that instructs basereconciler how to reconcile
 // a given kubernetes GVK (GroupVersionKind). This default config will be used if the "resource.Template" object (see

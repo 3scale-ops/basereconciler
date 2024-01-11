@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/3scale-ops/basereconciler/config"
 	"github.com/3scale-ops/basereconciler/resource"
 	"github.com/3scale-ops/basereconciler/util"
 	"github.com/go-logr/logr"
@@ -298,7 +299,7 @@ func (r *Reconciler) ReconcileOwnedResources(ctx context.Context, owner client.O
 		if ref != nil {
 			managedResources = append(managedResources, *ref)
 			gvk := schema.FromAPIVersionAndKind(ref.APIVersion, ref.Kind)
-			if changed := r.typeTracker.trackType(gvk); changed {
+			if changed := r.typeTracker.trackType(gvk); changed && config.AreDynamicWatchesEnabled() {
 				r.watchOwned(gvk, owner)
 				// requeue so we make sure we haven't lost any events related to the owned resource
 				// while the watch was not still up
