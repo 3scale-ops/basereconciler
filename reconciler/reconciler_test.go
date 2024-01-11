@@ -15,12 +15,16 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes/scheme"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
+	"sigs.k8s.io/controller-runtime/pkg/handler"
+	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
+	"sigs.k8s.io/controller-runtime/pkg/source"
 )
 
 func TestResult_ShouldReturn(t *testing.T) {
@@ -396,11 +400,23 @@ func TestReconciler_ManageResourceLifecycle(t *testing.T) {
 	}
 }
 
+type testController struct {
+	reconcile.Reconciler
+}
+
+func (c *testController) Watch(src source.Source, eventhandler handler.EventHandler, predicates ...predicate.Predicate) error {
+	return nil
+}
+func (c *testController) Start(ctx context.Context) error { return nil }
+func (c *testController) GetLogger() logr.Logger          { return logr.Discard() }
+
 func TestReconciler_ReconcileOwnedResources(t *testing.T) {
+
 	type fields struct {
-		Client client.Client
-		Log    logr.Logger
-		Scheme *runtime.Scheme
+		Client    client.Client
+		Log       logr.Logger
+		Scheme    *runtime.Scheme
+		SeenTypes []schema.GroupVersionKind
 	}
 	type args struct {
 		owner client.Object
@@ -415,9 +431,10 @@ func TestReconciler_ReconcileOwnedResources(t *testing.T) {
 		{
 			name: "Creates owned resources",
 			fields: fields{
-				Client: fake.NewClientBuilder().Build(),
-				Log:    logr.Discard(),
-				Scheme: scheme.Scheme,
+				Client:    fake.NewClientBuilder().Build(),
+				Log:       logr.Discard(),
+				Scheme:    scheme.Scheme,
+				SeenTypes: []schema.GroupVersionKind{},
 			},
 			args: args{
 				owner: &corev1.ServiceAccount{ObjectMeta: metav1.ObjectMeta{Name: "owner", Namespace: "ns"}},
@@ -425,6 +442,40 @@ func TestReconciler_ReconcileOwnedResources(t *testing.T) {
 					resource.NewTemplateFromObjectFunction[*corev1.Service](
 						func() *corev1.Service {
 							return &corev1.Service{ObjectMeta: metav1.ObjectMeta{Name: "service", Namespace: "ns"}}
+						}),
+					resource.NewTemplateFromObjectFunction[*corev1.ConfigMap](
+						func() *corev1.ConfigMap {
+							return &corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Name: "cm", Namespace: "ns"}}
+						}),
+				},
+			},
+			want: Result{
+				Action:       ReturnAndRequeueAction,
+				RequeueAfter: 0,
+				Error:        nil,
+			},
+		},
+		{
+			name: "Updates owned resources and does not add new watches",
+			fields: fields{
+				Client: fake.NewClientBuilder().WithObjects(
+					&corev1.ServiceAccount{ObjectMeta: metav1.ObjectMeta{Name: "owner", Namespace: "ns"}},
+					&corev1.Service{ObjectMeta: metav1.ObjectMeta{Name: "service", Namespace: "ns"}},
+					&corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Name: "cm", Namespace: "ns"}},
+				).Build(),
+				Log:    logr.Discard(),
+				Scheme: scheme.Scheme,
+				SeenTypes: []schema.GroupVersionKind{
+					{Group: "", Version: "v1", Kind: "Service"},
+					{Group: "", Version: "v1", Kind: "ConfigMap"},
+				},
+			},
+			args: args{
+				owner: &corev1.ServiceAccount{ObjectMeta: metav1.ObjectMeta{Name: "owner", Namespace: "ns"}},
+				list: []resource.TemplateInterface{
+					resource.NewTemplateFromObjectFunction[*corev1.Service](
+						func() *corev1.Service {
+							return &corev1.Service{ObjectMeta: metav1.ObjectMeta{Name: "service", Namespace: "ns", Labels: map[string]string{"key": "value"}}}
 						}),
 					resource.NewTemplateFromObjectFunction[*corev1.ConfigMap](
 						func() *corev1.ConfigMap {
@@ -444,6 +495,10 @@ func TestReconciler_ReconcileOwnedResources(t *testing.T) {
 			r := &Reconciler{
 				Client: tt.fields.Client,
 				Scheme: tt.fields.Scheme,
+				typeTracker: typeTracker{
+					seenTypes: tt.fields.SeenTypes,
+					ctrl:      &testController{},
+				},
 			}
 			got := r.ReconcileOwnedResources(context.TODO(), tt.args.owner, tt.args.list)
 			if diff := cmp.Diff(got, tt.want); len(diff) > 0 {
