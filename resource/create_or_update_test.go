@@ -166,7 +166,6 @@ func TestCreateOrUpdate(t *testing.T) {
 			},
 			wantErr: false,
 			wantObject: &corev1.Service{
-				TypeMeta: metav1.TypeMeta{Kind: "Service", APIVersion: "v1"},
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "service",
 					Namespace: "ns",

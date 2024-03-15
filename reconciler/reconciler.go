@@ -129,11 +129,12 @@ type Reconciler struct {
 	Log         logr.Logger
 	Scheme      *runtime.Scheme
 	typeTracker typeTracker
+	mgr         manager.Manager
 }
 
 // NewFromManager returns a new Reconciler from a controller-runtime manager.Manager
 func NewFromManager(mgr manager.Manager) *Reconciler {
-	return &Reconciler{Client: mgr.GetClient(), Scheme: mgr.GetScheme(), Log: logr.Discard()}
+	return &Reconciler{Client: mgr.GetClient(), Scheme: mgr.GetScheme(), Log: logr.Discard(), mgr: mgr}
 }
 
 // WithLogger sets the Reconciler logger
@@ -194,7 +195,7 @@ func (r *Reconciler) ManageResourceLifecycle(ctx context.Context, req reconcile.
 		// resource
 		if options.finalizer != nil && controllerutil.ContainsFinalizer(obj, *options.finalizer) {
 
-			err := r.finalize(ctx, options.finalizationLogic, logger)
+			err := r.finalize(ctx, options.finalizationLogic)
 			if err != nil {
 				logger.Error(err, "unable to delete instance")
 				return Result{Error: err}
@@ -266,7 +267,7 @@ func (r *Reconciler) inMemoryInitialization(ctx context.Context, obj client.Obje
 }
 
 // finalize contains finalization logic for the Reconciler
-func (r *Reconciler) finalize(ctx context.Context, fns []finalizationFunction, log logr.Logger) error {
+func (r *Reconciler) finalize(ctx context.Context, fns []finalizationFunction) error {
 	// Call any cleanup functions passed
 	for _, fn := range fns {
 		err := fn(ctx, r.Client)
@@ -350,8 +351,8 @@ func (r *Reconciler) FilteredEventHandler(ol client.ObjectList,
 	filter func(event client.Object, o client.Object) bool, logger logr.Logger) handler.EventHandler {
 
 	return handler.EnqueueRequestsFromMapFunc(
-		func(event client.Object) []reconcile.Request {
-			if err := r.Client.List(context.TODO(), ol); err != nil {
+		func(ctx context.Context, event client.Object) []reconcile.Request {
+			if err := r.Client.List(ctx, ol); err != nil {
 				logger.Error(err, "unable to retrieve the list of resources")
 				return []reconcile.Request{}
 			}

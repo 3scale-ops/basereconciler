@@ -57,7 +57,7 @@ func CreateOrUpdate(ctx context.Context, cl client.Client, scheme *runtime.Schem
 				if err := controllerutil.SetControllerReference(owner, desired, scheme); err != nil {
 					return nil, wrapError("unable to set controller reference", key, gvk, err)
 				}
-				err = cl.Create(ctx, desired)
+				err = cl.Create(ctx, util.SetTypeMeta(desired, gvk))
 				if err != nil {
 					return nil, wrapError("unable to create resource", key, gvk, err)
 				}
@@ -107,7 +107,7 @@ func CreateOrUpdate(ctx context.Context, cl client.Client, scheme *runtime.Schem
 
 		}
 
-		u_live, err := runtime.DefaultUnstructuredConverter.ToUnstructured(live)
+		u_live, err := runtime.DefaultUnstructuredConverter.ToUnstructured(util.SetTypeMeta(live, gvk))
 		if err != nil {
 			return nil, wrapError("unable to convert to unstructured", key, gvk, err)
 		}
