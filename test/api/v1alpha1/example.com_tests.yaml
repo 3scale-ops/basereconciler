@@ -3,8 +3,7 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    controller-gen.kubebuilder.io/version: v0.10.0
-  creationTimestamp: null
+    controller-gen.kubebuilder.io/version: v0.14.0
   name: tests.example.com
 spec:
   group: example.com
@@ -21,14 +20,19 @@ spec:
         description: Test is the Schema for the tests API
         properties:
           apiVersion:
-            description: 'APIVersion defines the versioned schema of this representation
-              of an object. Servers should convert recognized schemas to the latest
-              internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
             type: string
           kind:
-            description: 'Kind is a string value representing the REST resource this
-              object represents. Servers may infer this from the endpoint the client
-              submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+              Cannot be updated.
+              In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
             type: string
           metadata:
             type: object
@@ -59,9 +63,10 @@ spec:
                     format: int32
                     type: integer
                   collisionCount:
-                    description: Count of hash collisions for the Deployment. The
-                      Deployment controller uses this field as a collision avoidance
-                      mechanism when it needs to create the name for the newest ReplicaSet.
+                    description: |-
+                      Count of hash collisions for the Deployment. The Deployment controller uses this
+                      field as a collision avoidance mechanism when it needs to create the name for the
+                      newest ReplicaSet.
                     format: int32
                     type: integer
                   conditions:
@@ -114,11 +119,10 @@ spec:
                     format: int32
                     type: integer
                   unavailableReplicas:
-                    description: Total number of unavailable pods targeted by this
-                      deployment. This is the total number of pods that are still
-                      required for the deployment to have 100% available capacity.
-                      They may either be pods that are running but not yet available
-                      or pods that still have not been created.
+                    description: |-
+                      Total number of unavailable pods targeted by this deployment. This is the total number of
+                      pods that are still required for the deployment to have 100% available capacity. They may
+                      either be pods that are running but not yet available or pods that still have not been created.
                     format: int32
                     type: integer
                   updatedReplicas:

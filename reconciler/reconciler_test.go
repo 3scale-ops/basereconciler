@@ -18,10 +18,12 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes/scheme"
+	"k8s.io/client-go/rest"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
+	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
@@ -205,6 +207,7 @@ func TestReconciler_ManageResourceLifecycle(t *testing.T) {
 					&corev1.Service{ObjectMeta: metav1.ObjectMeta{
 						Name: "my-resource", Namespace: "ns",
 						DeletionTimestamp: &metav1.Time{Time: time.Now()},
+						Finalizers:        []string{"finalizer"},
 					}},
 				).Build(),
 				Log:    logr.Discard(),
@@ -417,6 +420,7 @@ func TestReconciler_ReconcileOwnedResources(t *testing.T) {
 		Log       logr.Logger
 		Scheme    *runtime.Scheme
 		SeenTypes []schema.GroupVersionKind
+		mgr       manager.Manager
 	}
 	type args struct {
 		owner client.Object
@@ -435,6 +439,7 @@ func TestReconciler_ReconcileOwnedResources(t *testing.T) {
 				Log:       logr.Discard(),
 				Scheme:    scheme.Scheme,
 				SeenTypes: []schema.GroupVersionKind{},
+				mgr:       func() manager.Manager { mgr, _ := ctrl.NewManager(&rest.Config{}, ctrl.Options{}); return mgr }(),
 			},
 			args: args{
 				owner: &corev1.ServiceAccount{ObjectMeta: metav1.ObjectMeta{Name: "owner", Namespace: "ns"}},
@@ -469,6 +474,7 @@ func TestReconciler_ReconcileOwnedResources(t *testing.T) {
 					{Group: "", Version: "v1", Kind: "Service"},
 					{Group: "", Version: "v1", Kind: "ConfigMap"},
 				},
+				mgr: func() manager.Manager { mgr, _ := ctrl.NewManager(&rest.Config{}, ctrl.Options{}); return mgr }(),
 			},
 			args: args{
 				owner: &corev1.ServiceAccount{ObjectMeta: metav1.ObjectMeta{Name: "owner", Namespace: "ns"}},
@@ -499,6 +505,7 @@ func TestReconciler_ReconcileOwnedResources(t *testing.T) {
 					seenTypes: tt.fields.SeenTypes,
 					ctrl:      &testController{},
 				},
+				mgr: tt.fields.mgr,
 			}
 			got := r.ReconcileOwnedResources(context.TODO(), tt.args.owner, tt.args.list)
 			if diff := cmp.Diff(got, tt.want); len(diff) > 0 {

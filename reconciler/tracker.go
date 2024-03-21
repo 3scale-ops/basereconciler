@@ -68,7 +68,10 @@ func (r *Reconciler) watchOwned(gvk schema.GroupVersionKind, owner client.Object
 	}
 	r.typeTracker.mu.Lock()
 	defer r.typeTracker.mu.Unlock()
-	err = r.typeTracker.ctrl.Watch(&source.Kind{Type: o}, &handler.EnqueueRequestForOwner{OwnerType: owner, IsController: true})
+	err = r.typeTracker.ctrl.Watch(
+		source.Kind(r.mgr.GetCache(), o),
+		handler.EnqueueRequestForOwner(r.mgr.GetScheme(), r.mgr.GetRESTMapper(), owner, handler.OnlyControllerOwner()),
+	)
 	if err != nil {
 		return err
 	}

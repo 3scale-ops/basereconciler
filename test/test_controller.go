@@ -34,7 +34,6 @@ import (
 	"k8s.io/utils/pointer"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/source"
 )
 
 // Reconciler reconciles a Test object
@@ -165,7 +164,7 @@ func (r *Reconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return reconciler.SetupWithDynamicTypeWatches(r,
 		ctrl.NewControllerManagedBy(mgr).
 			For(&v1alpha1.Test{}).
-			Watches(&source.Kind{Type: &corev1.Secret{TypeMeta: metav1.TypeMeta{Kind: "Secret"}}},
+			Watches(&corev1.Secret{TypeMeta: metav1.TypeMeta{Kind: "Secret"}},
 				r.FilteredEventHandler(
 					&v1alpha1.TestList{},
 					func(event, o client.Object) bool {

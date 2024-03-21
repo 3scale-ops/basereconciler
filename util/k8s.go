@@ -77,6 +77,11 @@ func ObjectReference(o client.Object, gvk schema.GroupVersionKind) *corev1.Objec
 	}
 }
 
+func SetTypeMeta(o client.Object, gvk schema.GroupVersionKind) client.Object {
+	o.GetObjectKind().SetGroupVersionKind(gvk)
+	return o
+}
+
 // Defaulter defines functions for setting defaults on resources.
 type Defaulter interface {
 	client.Object
