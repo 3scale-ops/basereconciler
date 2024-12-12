@@ -76,7 +76,7 @@ GOBINDATA ?= $(LOCALBIN)/go-bindata
 ## Tool Versions
 CONTROLLER_TOOLS_VERSION ?= v0.14.0
 GINKGO_VERSION ?= v2.14.0
-ENVTEST_VERSION ?= latest
+ENVTEST_VERSION ?= release-0.17
 
 .PHONY: controller-gen
 controller-gen: $(CONTROLLER_GEN) ## Download controller-gen locally if necessary.
