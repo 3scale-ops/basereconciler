@@ -1,5 +1,5 @@
 # ENVTEST_K8S_VERSION refers to the version of kubebuilder assets to be downloaded by envtest binary.
-ENVTEST_K8S_VERSION = 1.27
+ENVTEST_K8S_VERSION = 1.31.0
 
 # Get the currently used golang install path (in GOPATH/bin, unless GOBIN is set)
 ifeq (,$(shell go env GOBIN))
@@ -74,9 +74,9 @@ KIND ?= $(LOCALBIN)/kind
 GOBINDATA ?= $(LOCALBIN)/go-bindata
 
 ## Tool Versions
-CONTROLLER_TOOLS_VERSION ?= v0.14.0
-GINKGO_VERSION ?= v2.14.0
-ENVTEST_VERSION ?= release-0.17
+CONTROLLER_TOOLS_VERSION ?= v0.17.1
+GINKGO_VERSION ?= v2.22.2
+ENVTEST_VERSION ?= release-0.20
 
 .PHONY: controller-gen
 controller-gen: $(CONTROLLER_GEN) ## Download controller-gen locally if necessary.

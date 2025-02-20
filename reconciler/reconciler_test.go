@@ -22,9 +22,7 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
-	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
-	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
 )
@@ -407,7 +405,7 @@ type testController struct {
 	reconcile.Reconciler
 }
 
-func (c *testController) Watch(src source.Source, eventhandler handler.EventHandler, predicates ...predicate.Predicate) error {
+func (c *testController) Watch(src source.Source) error {
 	return nil
 }
 func (c *testController) Start(ctx context.Context) error { return nil }
